@@ -379,9 +379,11 @@ showPathLabel   : Displays the current node structure to resizingBar.  default: 
 charCounter     : Shows the number of characters in the editor.     
                   If the maxCharCount option has a value, it becomes true. default: false {Boolean}
 charCounterType : Defines the calculation method of the "charCounter" option.
-                  ('char': character length, 'byte': binary data length)      default: 'char' {String}
+                  'char': Characters length.
+                  'byte': Binary data size of characters.
+                  'byte-html': Binary data size of the full HTML string.   default: 'char' {String}
 charCounterLabel: Text to be displayed in the "charCounter" area of the bottom bar.
-                  Screen ex) 'charCounterLabel: ' 20 / 200          default: null {String}
+                  Screen ex) 'charCounterLabel : 20/200'.           default: null {String}
 maxCharCount    : The maximum number of characters allowed to be inserted into the editor. default: null {Number}
 
 // Width size----------------------------------------------------------------------------------------------------
@@ -504,6 +506,7 @@ textStyles      : You can apply custom style or class to selected text.
 imageResizing   : Can resize the image.                               default: true {Boolean}
 imageHeightShow : Choose whether the image height input is visible.   default: true {Boolean}
 imageWidth      : The default width size of the image frame.          default: 'auto' {String}
+imageHeight     : The default height size of the image frame.         default: 'auto' {String}
 imageSizeOnlyPercentage : If true, image size can only be scaled by percentage.   default: false {Boolean}
 imageRotation   : Choose whether to image rotation buttons display.
                   When "imageSizeOnlyPercentage" is "true" or  or "imageHeightShow" is "false" the default value is false.                       
@@ -537,6 +540,7 @@ videoResizing   : Can resize the video iframe.                         default: 
 videoHeightShow : Choose whether the video height input is visible.    default: true {Boolean}
 videoRatioShow  : Choose whether the video ratio options is visible.   default: true {Boolean}
 videoWidth      : The default width size of the video frame.           default: '100%' {String}
+videoHeight     : The default height size of the video frame.          default: '56.25%' {String}
 videoSizeOnlyPercentage : If true, video size can only be scaled by percentage.   default: false {Boolean}
 videoRotation   : Choose whether to video rotation buttons display.
                   When "videoSizeOnlyPercentage" is "true" or "videoHeightShow" is "false" the default value is false.
@@ -610,6 +614,9 @@ import suneditor from 'suneditor'
 
 const editor = suneditor.create('example');
 
+editor.core; // core object (The core object contains "util" and "functions".)
+editor.util; // util object
+
 // Add or reset option property
 editor.setOptions({
     minHeight: '300px',
@@ -665,6 +672,11 @@ editor.insertHTML('<img src="http://suneditor.com/sample/img/sunset.jpg">');
 
 // Change the contents of the suneditor
 editor.setContents('set contents');
+
+// Get the editor's number of characters or binary data size.
+// You can use the "charCounterType" option format.
+// If argument is no value, the currently set "charCounterType" option is used.
+editor.getCharCount((null || 'char' || 'byte' || 'byte-html'));
 
 // Add content to the suneditor
 editor.appendContents('append contents');
@@ -752,9 +764,9 @@ editor.onImageUploadBefore: function (files, info, core) {
     return Boolean
 }
 
-// Called when the image is uploaded or the uploaded image is deleted.
+// Called when the image is uploaded, updated, deleted.
 /**
- * targetImgElement: Current img element
+ * targetElement: Current img element
  * index: Uploaded index (key value)
  * state: Upload status ('create', 'update', 'delete')
  * imageInfo: {
@@ -763,12 +775,14 @@ editor.onImageUploadBefore: function (files, info, core) {
  * - size: file size
  * - select: select function
  * - delete: delete function
+ * - element: img element
+ * - src: src attribute of img tag
  * }
- * remainingFilesCount: Count of remaining image files
+ * remainingFilesCount: Count of remaining files to upload (0 when added as a url)
  * core: Core object
 */
-editor.onImageUpload = function (targetImgElement, index, state, imageInfo, remainingFilesCount, core) {
-    console.log(`targetImgElement:${targetImgElement}, index:${index}, state('create', 'update', 'delete'):${state}`)
+editor.onImageUpload = function (targetElement, index, state, imageInfo, remainingFilesCount, core) {
+    console.log(`targetElement:${targetElement}, index:${index}, state('create', 'update', 'delete'):${state}`)
     console.log(`imageInfo:${imageInfo}, remainingFilesCount:${remainingFilesCount}`)
 }
 
@@ -835,6 +849,26 @@ editor.imageUploadHandler = function (response, info, core) {
             else imagePlugin.create_image.call(core, fileList[i].url, info.linkValue, info.linkNewWindow, info.inputWidth, info.inputHeight, info.align, file);
         }
     }
+}
+
+// Called when the video(iframe) is is uploaded, updated, deleted
+/**
+ * targetElement: Current iframe element
+ * index: Uploaded index
+ * state: Upload status ('create', 'update', 'delete')
+ * videoInfo: {
+ * - index: data index
+ * - select: select function
+ * - delete: delete function
+ * - element: iframe element
+ * - src: src attribute of iframe tag
+ * }
+ * remainingFilesCount: Count of remaining files to upload (0 when added as a url)
+ * core: Core object
+ */
+editor.onVideoUpload = function (targetElement, index, state, videoInfo, remainingFilesCount, core) {
+    console.log(`targetElement:${targetElement}, index:${index}, state('create', 'update', 'delete'):${state}`)
+    console.log(`videoInfo:${videoInfo}, remainingFilesCount:${remainingFilesCount}`)
 }
 
 // Called just before the inline toolbar is positioned and displayed on the screen.

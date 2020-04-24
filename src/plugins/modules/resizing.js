@@ -23,6 +23,38 @@
 }(typeof window !== 'undefined' ? window : this, function (window, noGlobal) {
     const resizing = {
         name: 'resizing',
+        /**
+         * @description Constructor
+         * Require context properties when resizing module
+            inputX: Element,
+            inputY: Element,
+            _container: null,
+            _cover: null,
+            _element: null,
+            _element_w: 1,
+            _element_h: 1,
+            _element_l: 0,
+            _element_t: 0,
+            _defaultSizeX: 'auto',
+            _defaultSizeY: 'auto',
+            _origin_w: context.option.imageWidth === 'auto' ? '' : context.option.imageWidth,
+            _origin_h: context.option.imageHeight === 'auto' ? '' : context.option.imageHeight,
+            _proportionChecked: true,
+            // -- select function --
+            _resizing: context.option.imageResizing,
+            _resizeDotHide: !context.option.imageHeightShow,
+            _rotation: context.option.imageRotation,
+            _onlyPercentage: context.option.imageSizeOnlyPercentage,
+            _ratio: false,
+            _ratioX: 1,
+            _ratioY: 1
+            _captionShow: true,
+            // -- when used caption (_captionShow: true) --
+            _caption: null,
+            _captionChecked: false,
+            captionCheckEl: null,
+         * @param {Object} core Core object 
+         */
         add: function (core) {
             const icons = core.icons;
             const context = core.context;
@@ -202,6 +234,14 @@
             return resize_button;
         },
     
+        /**
+         * @description Gets the width size
+         * @param {Object} contextPlugin context object of plugin (core.context[plugin])
+         * @param {Element} element Target element
+         * @param {Element} cover Cover element (FIGURE)
+         * @param {Element} container Container element (DIV.se-component)
+         * @returns {String}
+         */
         _module_getSizeX: function (contextPlugin, element, cover, container) {
             if (!element) element = contextPlugin._element;
             if (!cover) cover = contextPlugin._cover;
@@ -212,6 +252,14 @@
             return !/%$/.test(element.style.width) ? element.style.width : (this.util.getNumber(container.style.width, 2) || 100) + '%';
         },
     
+        /**
+         * @description Gets the height size
+         * @param {Object} contextPlugin context object of plugin (core.context[plugin])
+         * @param {Element} element Target element
+         * @param {Element} cover Cover element (FIGURE)
+         * @param {Element} container Container element (DIV.se-component)
+         * @returns {String}
+         */
         _module_getSizeY: function (contextPlugin, element, cover, container) {
             if (!element) element = contextPlugin._element;
             if (!cover) cover = contextPlugin._cover;
@@ -219,10 +267,15 @@
     
             if (!container || !cover || !element) return '';
     
-            return this.util.getNumber(cover.style.paddingBottom) > 0 && !this.context.resizing._rotateVertical ? cover.style.height : (!/%$/.test(element.style.height) || !/%$/.test(element.style.width) ? element.style.height : (this.util.getNumber(container.style.height, 2) || 100) + '%');
+            return this.util.getNumber(cover.style.paddingBottom, 0) > 0 && !this.context.resizing._rotateVertical ? cover.style.height : (!/%$/.test(element.style.height) || !/%$/.test(element.style.width) ? element.style.height : (this.util.getNumber(container.style.height, 2) || 100) + '%');
         },
-    
-        _module_setModifyInputSize: function (contextPlugin, currentModule) {
+
+        /**
+         * @description Called at the "openModify" to put the size of the current target into the size input element.
+         * @param {Object} contextPlugin context object of plugin (core.context[plugin])
+         * @param {Object} pluginObj Plugin object
+         */
+        _module_setModifyInputSize: function (contextPlugin, pluginObj) {
             const percentageRotation = contextPlugin._onlyPercentage && this.context.resizing._rotateVertical;
             contextPlugin.proportion.checked = contextPlugin._proportionChecked = contextPlugin._element.getAttribute('data-proportion') !== 'false';
     
@@ -230,7 +283,7 @@
             if (x === contextPlugin._defaultSizeX) x = '';
             if (contextPlugin._onlyPercentage) x = this.util.getNumber(x, 2);
             contextPlugin.inputX.value = x;
-            currentModule.setInputSize.call(this, 'x');
+            pluginObj.setInputSize.call(this, 'x');
             
             if (!contextPlugin._onlyPercentage) {
                 let y = percentageRotation ? '' : this.plugins.resizing._module_getSizeY.call(this, contextPlugin);
@@ -243,9 +296,16 @@
             contextPlugin.inputY.disabled = percentageRotation ? true : false;
             contextPlugin.proportion.disabled = percentageRotation ? true : false;
     
-            currentModule.setRatio.call(this);
+            pluginObj.setRatio.call(this);
         },
     
+        /**
+         * @description It is called in "setInputSize" (input tag keyupEvent), 
+         * checks the value entered in the input tag, 
+         * calculates the ratio, and sets the calculated value in the input tag of the opposite size.
+         * @param {Object} contextPlugin context object of plugin (core.context[plugin])
+         * @param {String} xy 'x': width, 'y': height
+         */
         _module_setInputSize: function (contextPlugin, xy) {
             if (contextPlugin._onlyPercentage) {
                 if (xy === 'x' && contextPlugin.inputX.value > 100) contextPlugin.inputX.value = 100;
@@ -268,6 +328,11 @@
             }
         },
     
+        /**
+         * @description It is called in "setRatio" (input and proportionCheck tags changeEvent), 
+         * checks the value of the input tag, calculates the ratio, and resets it in the input tag.
+         * @param {Object} contextPlugin context object of plugin (core.context[plugin])
+         */
         _module_setRatio: function (contextPlugin) {
             const xValue = contextPlugin.inputX.value;
             const yValue = contextPlugin.inputY.value;
@@ -279,8 +344,8 @@
                 if (xUnit !== yUnit) {
                     contextPlugin._ratio = false;
                 } else if (!contextPlugin._ratio) {
-                    const x = this.util.getNumber(xValue);
-                    const y = this.util.getNumber(yValue);
+                    const x = this.util.getNumber(xValue, 0);
+                    const y = this.util.getNumber(yValue, 0);
     
                     contextPlugin._ratio = true;
                     contextPlugin._ratioX = x / y;
@@ -291,6 +356,10 @@
             }
         },
     
+        /**
+         * @description Revert size of element to origin size (plugin._origin_w, plugin._origin_h)
+         * @param {Object} contextPlugin context object of plugin (core.context[plugin])
+         */
         _module_sizeRevert: function (contextPlugin) {
             if (contextPlugin._onlyPercentage) {
                 contextPlugin.inputX.value = contextPlugin._origin_w > 100 ? 100 : contextPlugin._origin_w;
@@ -300,6 +369,11 @@
             }
         },
     
+        /**
+         * @description Save the size data (element.setAttribute("data-size"))
+         * Used at the "setSize" method
+         * @param {Object} contextPlugin context object of plugin (core.context[plugin])
+         */
         _module_saveCurrentSize: function (contextPlugin) {
             const x = this.plugins.resizing._module_getSizeX.call(this, contextPlugin);
             const y = this.plugins.resizing._module_getSizeY.call(this, contextPlugin);
@@ -307,6 +381,12 @@
             if (!!contextPlugin._videoRatio) contextPlugin._videoRatio = y;
         },
     
+        /**
+         * @description Call the resizing module
+         * @param {Element} targetElement Resizing target element
+         * @param {string} plugin Plugin name
+         * @returns {Object} Size of resizing div {w, h, t, l}
+         */
         call_controller_resize: function (targetElement, plugin) {
             const contextResizing = this.context.resizing;
             const contextPlugin = this.context[plugin];
@@ -358,7 +438,7 @@
     
             // align icon
             const alignList = contextResizing.alignMenuList;
-            this.util.changeIcon(contextResizing.alignButton.querySelector('svg'), contextResizing.alignIcons[align]);
+            this.util.changeElement(contextResizing.alignButton.querySelector('svg'), contextResizing.alignIcons[align]);
             for (let i = 0, len = alignList.length; i < len; i++) {
                 if (alignList[i].getAttribute('data-value') === align) this.util.addClass(alignList[i], 'on');
                 else this.util.removeClass(alignList[i], 'on');
@@ -366,7 +446,7 @@
     
             // percentage active
             const pButtons = contextResizing.percentageButtons;
-            const value = /%$/.test(targetElement.style.width) && /%$/.test(container.style.width) ? (this.util.getNumber(container.style.width) / 100) + '' : '' ;
+            const value = /%$/.test(targetElement.style.width) && /%$/.test(container.style.width) ? (this.util.getNumber(container.style.width, 0) / 100) + '' : '' ;
             for (let i = 0, len = pButtons.length; i < len; i++) {
                 if (pButtons[i].getAttribute('data-value') === value) {
                     this.util.addClass(pButtons[i], 'active');
@@ -390,8 +470,8 @@
             }
     
             this._resizingName = plugin;
-            this.toggleDisabledButtons(true);
-            this.controllersOn(contextResizing.resizeContainer, contextResizing.resizeButton, this.toggleDisabledButtons.bind(this, false), targetElement, plugin);
+            this.util.toggleDisabledButtons(true, this.resizingDisabledButtons);
+            this.controllersOn(contextResizing.resizeContainer, contextResizing.resizeButton, this.util.toggleDisabledButtons.bind(this, false, this.resizingDisabledButtons), targetElement, plugin);
     
             // button group
             const overLeft = this.context.element.wysiwygFrame.offsetWidth - l - contextResizing.resizeButton.offsetWidth;
@@ -421,9 +501,13 @@
         },
     
         _closeAlignMenu: null,
+
+        /**
+         * @description Open align submenu of module
+         */
         openAlignMenu: function () {
             this.util.addClass(this.context.resizing.alignButton, 'on');
-            this.context.resizing.alignMenu.style.display = 'inline-table';
+            this.context.resizing.alignMenu.style.display = 'block';
     
             this.plugins.resizing._closeAlignMenu = function () {
                 this.util.removeClass(this.context.resizing.alignButton, 'on');
@@ -435,6 +519,10 @@
             this.addDocEvent('mousedown', this.plugins.resizing._closeAlignMenu);
         },
     
+        /**
+         * @description Return HTML string of caption(FIGCAPTION) element
+         * @returns {String}
+         */
         create_caption: function () {
             const caption = this.util.createElement('FIGCAPTION');
             caption.setAttribute('contenteditable', true);
@@ -442,6 +530,10 @@
             return caption;
         },
     
+        /**
+         * @description Cover the target element with a FIGURE element.
+         * @param {Element} element Target element
+         */
         set_cover: function (element) {
             const cover = this.util.createElement('FIGURE');
             cover.appendChild(element);
@@ -449,6 +541,12 @@
             return cover;
         },
     
+        /**
+         * @description Create a container for the resizing component and insert the element.
+         * @param {Element} cover Cover element (FIGURE)
+         * @param {String} className Class name of container (fixed: se-component)
+         * @returns {Element} Created container element
+         */
         set_container: function (cover, className) {
             const container = this.util.createElement('DIV');
             container.className = 'se-component ' + className;
@@ -458,6 +556,11 @@
             return container;
         },
     
+        /**
+         * @description Click event of resizing toolbar
+         * Performs the action of the clicked toolbar button.
+         * @param {MouseEvent} e Event object
+         */
         onClick_resizeButton: function (e) {
             e.stopPropagation();
     
@@ -493,7 +596,7 @@
                     }
     
                     this.plugins.resizing.resetTransform.call(this, contextEl);
-                    currentModule.setPercentSize.call(this, (value * 100), percentY);
+                    currentModule.setPercentSize.call(this, (value * 100), (this.util.getNumber(percentY, 0) === null || !/%$/.test(percentY)) ? '' : percentY);
                     currentModule.onModifyMode.call(this, contextEl, this.plugins.resizing.call_controller_resize.call(this, contextEl, pluginName));
                     break;
                 case 'mirror':
@@ -525,7 +628,7 @@
                     break;
                 case 'onalign':
                     this.plugins.resizing.openAlignMenu.call(this);
-                    break;
+                    return;
                 case 'align':
                     const alignValue = value === 'basic' ? 'none' : value;
                     currentModule.setAlign.call(this, alignValue, null, null, null);
@@ -578,6 +681,10 @@
             this.history.push(false);
         },
     
+        /**
+         * @description Initialize the transform style (rotation) of the element.
+         * @param {Element} element Target element
+         */
         resetTransform: function (element) {
             const size = (element.getAttribute('data-size') || element.getAttribute('data-origin') || '').split(',');
             this.context.resizing._rotateVertical = false;
@@ -592,6 +699,12 @@
             this.plugins[this.context.resizing._resize_plugin].setSize.call(this, size[0] ? size[0] : 'auto', size[1] ? size[1] : '', true);
         },
     
+        /**
+         * @description Set the transform style (rotation) of the element.
+         * @param {Element} element Target element
+         * @param {Number|null} width Element's width size
+         * @param {Number|null} height Element's height size
+         */
         setTransformSize: function (element, width, height) {
             let percentage = element.getAttribute('data-percentage');
             const isVertical = this.context.resizing._rotateVertical;
@@ -669,6 +782,10 @@
             element.style.transform = 'rotate(' + r + 'deg)' + (x ? ' rotateX(' + x + 'deg)' : '') + (y ? ' rotateY(' + y + 'deg)' : '') + (translate ? ' translate' + translate + '(' + width + 'px)' : '');
         },
     
+        /**
+         * @description The position of the caption is set automatically.
+         * @param {Element} element Target element (not caption element)
+         */
         setCaptionPosition: function (element) {
             const figcaption = this.util.getChildElement(this.util.getParentElement(element, 'FIGURE'), 'FIGCAPTION');
             if (figcaption) {
@@ -676,7 +793,10 @@
             }
         },
     
-        // resizing
+        /**
+         * @description Mouse down event of resize handles
+         * @param {MouseEvent} e Event object 
+         */
         onMouseDown_resize_handle: function (e) {
             const contextResizing = this.context.resizing;
             const direction = contextResizing._resize_direction = e.target.classList[0];
@@ -709,7 +829,7 @@
                     this.plugins[this.context.resizing._resize_plugin].init.call(this);
                 } else {
                     // element resize
-                    this.plugins.resizing.cancel_controller_resize.call(this);
+                    this.plugins.resizing.cancel_controller_resize.call(this, direction);
                     // history stack
                     if (change) this.history.push(false);
                 }
@@ -723,6 +843,14 @@
             this.addDocEvent('keydown', closureFunc_bind);
         },
     
+        /**
+         * @description Mouse move event after call "onMouseDown_resize_handle" of resize handles
+         * The size of the module's "div" is adjusted according to the mouse move event.
+         * @param {Object} contextResizing "core.context.resizing" object (binding argument)
+         * @param {String} direction Direction ("tl", "tr", "bl", "br", "lw", "th", "rw", "bh") (binding argument)
+         * @param {Object} plugin "core.context[currentPlugin]" object (binding argument)
+         * @param {MouseEvent} e Event object
+         */
         resizing_element: function (contextResizing, direction, plugin, e) {
             const clientX = e.clientX;
             const clientY = e.clientY;
@@ -757,7 +885,12 @@
             contextResizing._isChange = true;
         },
     
-        cancel_controller_resize: function () {
+        /**
+         * @description Resize the element to the size of the "div" adjusted in the "resizing_element" method.
+         * Called at the mouse-up event registered in "onMouseDown_resize_handle".
+         * @param {String} direction Direction ("tl", "tr", "bl", "br", "lw", "th", "rw", "bh")
+         */
+        cancel_controller_resize: function (direction) {
             const isVertical = this.context.resizing._rotateVertical;
             this.controllersOff();
             this.context.element.resizeBackground.style.display = 'none';
@@ -769,13 +902,13 @@
                 const padding = 16;
                 const limit = this.context.element.wysiwygFrame.clientWidth - (padding * 2) - 2;
                 
-                if (this.util.getNumber(w) > limit) {
+                if (this.util.getNumber(w, 0) > limit) {
                     h = this._w.Math.round((h / w) * limit);
                     w = limit;
                 }
             }
     
-            this.plugins[this.context.resizing._resize_plugin].setSize.call(this, w, h, false);
+            this.plugins[this.context.resizing._resize_plugin].setSize.call(this, w, h, false, direction);
             this.plugins[this.context.resizing._resize_plugin].init.call(this);
         }
     };

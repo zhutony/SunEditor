@@ -17,11 +17,12 @@ import _notice from '../plugins/modules/_notice';
  * @description SunEditor constuctor function.
  * create core object and event registration.
  * core, event, functions
- * @param context
- * @param plugins
- * @param lang
- * @param options
- * @param _icons
+ * @param {Object} context
+ * @param {Object} pluginCallButtons
+ * @param {Object} plugins 
+ * @param {Object} lang
+ * @param {Object} options
+ * @param {Object} _icons
  * @returns {Object} functions Object
  */
 export default function (context, pluginCallButtons, plugins, lang, options, _icons) {
@@ -172,9 +173,21 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         currentControllerTarget: null,
 
         /**
-         * @description An array of buttons whose class name is not "code-view-enabled"
+         * @description An array of buttons whose class name is not "se-code-view-enabled"
          */
         codeViewDisabledButtons: null,
+
+        /**
+         * @description An array of buttons whose class name is not "se-resizing-enabled"
+         */
+        resizingDisabledButtons: null,
+
+        /**
+         * @description Tag whitelist RegExp object used in "_consistencyCheckOfHTML" method
+         * ^(options._editorTagsWhitelist)$
+         * @private
+         */
+        _htmlCheckWhitelistRegExp: null,
 
         /**
          * @description Editor tags whitelist (RegExp object)
@@ -254,11 +267,18 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         _antiBlur: false,
 
         /**
-         * @description If true, (initialize, reset) all indexes of image information
+         * @description Component line breaker element
          * @private
          */
-        _imagesInfoInit: true,
-        _imagesInfoReset: false,
+        _lineBreaker: null,
+        _lineBreakerButton: null,
+
+        /**
+         * @description If true, (initialize, reset) all indexes of image, video information
+         * @private
+         */
+        _componentsInfoInit: true,
+        _componentsInfoReset: false,
 
         /**
          * @description An user event function before image uploaded
@@ -270,11 +290,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         /**
-         * @description An user event function when image uploaded success or remove image
+         * @description An user event function when image info is changed
          * @private
          */
-        _imageUpload: function (targetImgElement, index, state, imageInfo, remainingFilesCount) {
-            if (typeof functions.onImageUpload === 'function') functions.onImageUpload(targetImgElement, index * 1, state, imageInfo, remainingFilesCount, this);
+        _imageUpload: function (targetElement, index, state, imageInfo, remainingFilesCount) {
+            if (typeof functions.onImageUpload === 'function') functions.onImageUpload(targetElement, index * 1, state, imageInfo, remainingFilesCount, this);
         },
 
         /**
@@ -300,16 +320,31 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         /**
+         * @description An user event function when video info is changed
+         * @private
+         */
+        _videoUpload: function (targetElement, index, state, videoInfo, remainingFilesCount) {
+            if (typeof functions.onVideoUpload === 'function') functions.onVideoUpload(targetElement, index * 1, state, videoInfo, remainingFilesCount, this);
+        },
+
+        /**
          * @description Plugins array with "active" method.
          * "activePlugins" runs the "add" method when creating the editor.
          */
         activePlugins: null,
 
         /**
+         * @description Plugins array with "checkComponentInfo" and "resetComponentInfo" methods.
+         * "componentInfoPlugins" runs the "add" method when creating the editor.
+         * "checkComponentInfo" method is always call just before the "change" event.
+         */
+        componentInfoPlugins: null,
+
+        /**
          * @description Elements that need to change text or className for each selection change
          * After creating the editor, "activePlugins" are added.
          * @property {Element} STRONG bold button
-         * @property {Element} INS underline button
+         * @property {Element} U underline button
          * @property {Element} EM italic button
          * @property {Element} DEL strike button
          * @property {Element} SUB subscript button
@@ -325,7 +360,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          */
         _defaultCommand: {
             bold: 'STRONG',
-            underline: 'INS',
+            underline: 'U',
             italic: 'EM',
             strike: 'DEL',
             subscript: 'SUB',
@@ -361,9 +396,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             _wysiwygOriginCssText: '',
             _codeOriginCssText: '',
             _fullScreenAttrs: {sticky: false, balloon: false, inline: false},
-            _imagesInfo: [],
-            _imageIndex: 0,
-            _videosCnt: 0
+            _lineBreakComp: null,
+            _lineBreakDir: ''
         },
 
         /**
@@ -432,16 +466,43 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             if (this._bindControllersOff) this.controllersOff();
 
             const submenuName = this._submenuName = element.getAttribute('data-command');
+            const submenu = this.submenu = element.nextElementSibling;
 
-            this.submenu = element.nextElementSibling;
-            this.submenu.style.display = 'block';
+            submenu.style.top = '-10000px';
+            submenu.style.visibility = 'hidden';
+            submenu.style.display = 'block';
             util.addClass(element, 'on');
             this.submenuActiveButton = element;
 
-            const overLeft = this.context.element.toolbar.offsetWidth - (element.parentElement.offsetLeft + this.submenu.offsetWidth);
-            if (overLeft < 0) this.submenu.style.left = overLeft + 'px';
-            else this.submenu.style.left = '1px';
+            const toolbar = this.context.element.toolbar;
+            const toolbarW = toolbar.offsetWidth;
+            const menuW = submenu.offsetWidth;
+            const overLeft = toolbarW <= menuW ? 0 : toolbarW - (element.parentElement.offsetLeft + menuW);
+            if (overLeft < 0) submenu.style.left = overLeft + 'px';
+            else submenu.style.left = '1px';
 
+
+            let t = 0;
+            let offsetEl = element;
+            while (offsetEl && offsetEl !== toolbar) {
+                t += offsetEl.offsetTop;
+                offsetEl = offsetEl.offsetParent;
+            }
+
+            if (this._isBalloon) {
+                t += toolbar.offsetTop + element.offsetHeight;
+            } else {
+                t -= element.offsetHeight;
+            }
+
+            const space = t + submenu.offsetHeight - context.element.wysiwyg.offsetHeight + 3;
+            if (space > 0 && event._getPageBottomSpace() < space) {
+                submenu.style.top = (-1 * (submenu.offsetHeight + 3)) + 'px';
+            } else {
+                submenu.style.top = '';
+            }
+
+            submenu.style.visibility = '';
             this._bindedSubmenuOff = this.submenuOff.bind(this);
             this.addDocEvent('mousedown', this._bindedSubmenuOff, false);
 
@@ -476,15 +537,17 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             if (this._bindedContainerOff) this._bindedContainerOff();
 
             const containerName = this._containerName = element.getAttribute('data-command');
+            const container = this.container = element.nextElementSibling;
 
-            this.container = element.nextElementSibling;
-            this.container.style.display = 'block';
+            container.style.display = 'block';
             util.addClass(element, 'on');
             this.containerActiveButton = element;
 
-            const overLeft = this.context.element.toolbar.offsetWidth - (element.parentElement.offsetLeft + this.container.offsetWidth);
-            if (overLeft < 0) this.container.style.left = overLeft + 'px';
-            else this.container.style.left = '1px';
+            const toolbarW = this.context.element.toolbar.offsetWidth;
+            const menuW = container.offsetWidth;
+            const overLeft = toolbarW <= menuW ? 0 : toolbarW - (element.parentElement.offsetLeft + menuW);
+            if (overLeft < 0) container.style.left = overLeft + 'px';
+            else container.style.left = '1px';
 
             this._bindedContainerOff = this.containerOff.bind(this);
             this.addDocEvent('mousedown', this._bindedContainerOff, false);
@@ -541,22 +604,21 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 this.controllerArray[i] = arg;
             }
 
-            this._notHideToolbar = true;
             this._bindControllersOff = this.controllersOff.bind(this);
             this.addDocEvent('mousedown', this._bindControllersOff, false);
             this.addDocEvent('keydown', this._bindControllersOff, false);
+            this._antiBlur = true;
 
             if (typeof functions.showController === 'function') functions.showController(this.currentControllerName, this.controllerArray, this);
-            this._antiBlur = true;
         },
 
         /**
          * @description Hide controller at editor area (link button, image resize button..)
+         * @param {KeyboardEvent|MouseEvent|null} e Event object when called from mousedown and keydown events registered in "core.controllersOn"
          */
         controllersOff: function (e) {
             if (this._resizingName && e && e.type === 'keydown' && e.keyCode !== 27) return;
 
-            this._notHideToolbar = false;
             this._resizingName = '';
             this.currentControllerName = '';
             this.currentControllerTarget = null;
@@ -593,10 +655,9 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         /**
-         * @description Use focus method of document
-         * @private
+         * @description Focus to wysiwyg area using "native focus function"
          */
-        _nativeFocus: function () {
+        nativeFocus: function () {
             const caption = util.getParentElement(this.getSelectionNode(), 'figcaption');
             if (caption) {
                 caption.focus();
@@ -614,7 +675,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             if (context.element.wysiwygFrame.style.display === 'none') return;
 
             if (options.iframe) {
-                this._nativeFocus();
+                this.nativeFocus();
             } else {
                 try {
                     const range = this.getRange();
@@ -623,12 +684,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         const format = util.createElement('P');
                         const br = util.createElement('BR');
                         format.appendChild(br);
-                        this.setRange(br, 0, 0, br);
+                        this.setRange(br, 0, br, 0);
                     } else {
                         this.setRange(range.startContainer, range.startOffset, range.endContainer, range.endOffset);
                     }
                 } catch (e) {
-                    this._nativeFocus();
+                    this.nativeFocus();
                 }
             }
 
@@ -638,9 +699,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
         /**
          * @description If "focusEl" is a component, then that component is selected; if it is a format element, the last text is selected
-         * @param {Element} focusEl Focus element
+         * If "focusEdge" is null, then selected last element
+         * @param {Element|null} focusEl Focus element
          */
         focusEdge: function (focusEl) {
+            if (!focusEl) focusEl = context.element.wysiwyg.lastElementChild;
+
             if (util.isComponent(focusEl)) {
                 const imageComponent = focusEl.querySelector('IMG');
                 const videoComponent = focusEl.querySelector('IFRAME');
@@ -650,18 +714,20 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 } else if (videoComponent) {
                     this.selectComponent(videoComponent, 'video');
                 }
-            } else {
+            } else if (focusEl) {
                 focusEl = util.getChildElement(focusEl, function (current) { return current.childNodes.length === 0 || current.nodeType === 3; }, true);
-                if (!focusEl) this._nativeFocus();
+                if (!focusEl) this.nativeFocus();
                 else this.setRange(focusEl, focusEl.textContent.length, focusEl, focusEl.textContent.length);
+            } else {
+                this.nativeFocus();
             }
         },
 
         /**
          * @description Set current editor's range object
-         * @param {Element} startCon The startContainer property of the selection object.
+         * @param {Node} startCon The startContainer property of the selection object.
          * @param {Number} startOff The startOffset property of the selection object.
-         * @param {Element} endCon The endContainer property of the selection object.
+         * @param {Node} endCon The endContainer property of the selection object.
          * @param {Number} endOff The endOffset property of the selection object.
          */
         setRange: function (startCon, startOff, endCon, endOff) {
@@ -675,7 +741,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 range.setStart(startCon, startOff);
                 range.setEnd(endCon, endOff);
             } catch (error) {
-                this._nativeFocus();
+                this.nativeFocus();
             }
 
             const selection = this.getSelection();
@@ -686,6 +752,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
             selection.addRange(range);
             this._editorRange();
+            if (options.iframe) this.nativeFocus();
         },
 
         /**
@@ -794,6 +861,15 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             let endOff = range.endOffset;
             let tempCon, tempOffset, tempChild;
 
+            if (util.isFormatElement(startCon)) {
+                startCon = startCon.childNodes[startOff];
+                startOff = 0;
+            }
+            if (util.isFormatElement(endCon)) {
+                endCon = endCon.childNodes[endOff];
+                endOff = 0;
+            }
+
             // startContainer
             tempCon = util.isWysiwygDiv(startCon) ? context.element.wysiwyg.firstChild : startCon;
             tempOffset = startOff;
@@ -806,8 +882,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         tempOffset = 0;
                     }
     
-                    let format = util.getFormatElement(tempCon);
-                    if (format === util.getRangeFormatElement(format)) {
+                    let format = util.getFormatElement(tempCon, null);
+                    if (format === util.getRangeFormatElement(format, null)) {
                         format = util.createElement(util.getParentElement(tempCon, util.isCell) ? 'DIV' : 'P');
                         tempCon.parentNode.insertBefore(format, tempCon);
                         format.appendChild(tempCon);
@@ -823,7 +899,6 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                             endCon = tempCon;
                             endOff = 1;
                         }
-                        util.removeItem(startCon);
                     }
                 }
             }
@@ -846,8 +921,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         tempOffset = tempOffset > 0 ? tempCon.textContent.length : tempOffset;
                     }
     
-                    let format = util.getFormatElement(tempCon);
-                    if (format === util.getRangeFormatElement(format)) {
+                    let format = util.getFormatElement(tempCon, null);
+                    if (format === util.getRangeFormatElement(format, null)) {
                         format = util.createElement(util.isCell(format) ? 'DIV' : 'P');
                         tempCon.parentNode.insertBefore(format, tempCon);
                         format.appendChild(tempCon);
@@ -859,7 +934,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     tempCon.parentNode.insertBefore(emptyText, tempCon);
                     tempCon = emptyText;
                     tempOffset = 1;
-                    if (onlyBreak) {
+                    if (onlyBreak && !tempCon.previousSibling) {
                         util.removeItem(endCon);
                     }
                 }
@@ -899,11 +974,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 return validation ? validation(current) : util.isFormatElement(current);
             });
 
-            if (!util.isWysiwygDiv(commonCon) && !util.isRangeFormatElement(commonCon)) lineNodes.unshift(util.getFormatElement(commonCon));
+            if (!util.isWysiwygDiv(commonCon) && !util.isRangeFormatElement(commonCon)) lineNodes.unshift(util.getFormatElement(commonCon, null));
             if (startCon === endCon || lineNodes.length === 1) return lineNodes;
 
-            let startLine = util.getFormatElement(startCon);
-            let endLine = util.getFormatElement(endCon);
+            let startLine = util.getFormatElement(startCon, null);
+            let endLine = util.getFormatElement(endCon, null);
             let startIdx = null;
             let endIdx = null;
             
@@ -947,7 +1022,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const commonCon = this.getRange().commonAncestorContainer;
             const myComponent = util.getParentElement(commonCon, util.isComponent);
             const selectedLines = util.isTable(commonCon) ? 
-                this.getSelectedElements() :
+                this.getSelectedElements(null) :
                 this.getSelectedElements(function (current) {
                     const component = this.getParentElement(current, this.isComponent);
                     return (this.isFormatElement(current) && (!component || component === myComponent)) || (this.isComponent(current) && !this.getFormatElement(current));
@@ -970,8 +1045,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
         /**
          * @description Determine if this offset is the edge offset of container
-         * @param {Object} container The container property of the selection object.
-         * @param {Number} offset The offset property of the selection object.
+         * @param {Node} container The node of the selection object. (range.startContainer..)
+         * @param {Number} offset The offset of the selection object. (core.getRange().startOffset...)
          * @returns {Boolean}
          */
         isEdgePoint: function (container, offset) {
@@ -1001,7 +1076,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @returns {Element}
          */
         appendFormatTag: function (element, formatNode) {
-            const currentFormatEl = util.getFormatElement(this.getSelectionNode());
+            const currentFormatEl = util.getFormatElement(this.getSelectionNode(), null);
             const oFormatName = formatNode ? (typeof formatNode === 'string' ? formatNode : formatNode.nodeName) : (util.isFormatElement(currentFormatEl) && !util.isFreeFormatElement(currentFormatEl)) ? currentFormatEl.nodeName : 'P';
             const oFormat = util.createElement(oFormatName);
             oFormat.innerHTML = '<br>';
@@ -1020,7 +1095,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @description The method to insert a element. (used elements : table, hr, image, video)
          * This method is add the element next line and insert the new line.
          * When used in a tag in "LI", it is inserted into the LI tag.
-         * Returns the next line added.
+         * Returns the first node of next line added.
          * @param {Element} element Element to be inserted
          * @param {Boolean} notHistoryPush When true, it does not update the history stack and the selection object and return EdgeNodes (util.getEdgeChildNodes)
          * @returns {Element}
@@ -1029,7 +1104,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const r = this.removeNode();
             let oNode = null;
             let selectionNode = this.getSelectionNode();
-            let formatEl = util.getFormatElement(selectionNode);
+            let formatEl = util.getFormatElement(selectionNode, null);
 
             if (util.isListCell(formatEl)) {
                 if (/^HR$/i.test(element.nodeName)) {
@@ -1056,10 +1131,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 if (!oNode) oNode = this.appendFormatTag(element, util.isFormatElement(formatEl) ? formatEl : null);
             }
 
+            const edgeNode = util.getEdgeChildNodes(oNode, null).sc;
+            oNode = edgeNode || oNode;
             this.setRange(oNode, 0, oNode, 0);
 
             // history stack
-            if (!notHistoryPush) this.history.push(false);
+            if (!notHistoryPush) this.history.push(1);
 
             return oNode;
         },
@@ -1082,7 +1159,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         core.plugins.image.openModify.call(core, true);
                         core.plugins.image.update_image.call(core, true, true, true);
                     }
-                });
+                }, null);
             } else if (componentName === 'video') {
                 if (!core.plugins.video) return;
 
@@ -1090,7 +1167,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 core.callPlugin('video', function () {
                     const size = core.plugins.resizing.call_controller_resize.call(core, element, 'video');
                     core.plugins.video.onModifyMode.call(core, element, size);
-                });
+                }, null);
             }
         },
 
@@ -1098,19 +1175,29 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @description Delete selected node and insert argument value node
          * If the "afterNode" exists, it is inserted after the "afterNode"
          * Inserting a text node merges with both text nodes on both sides and returns a new "{ startOffset, endOffset }".
-         * @param {Element} oNode Element to be inserted
-         * @param {Element|null} afterNode If the node exists, it is inserted after the node
+         * @param {Node} oNode Element to be inserted
+         * @param {Node|null} afterNode If the node exists, it is inserted after the node
          * @returns {undefined|Object}
          */
         insertNode: function (oNode, afterNode) {
+            const isComp = util.isFormatElement(oNode) || util.isRangeFormatElement(oNode) || util.isComponent(oNode);
+
+            if (!afterNode && isComp) {
+                const r = this.removeNode();
+                if (r.container.nodeType === 3 || util.isBreak(r.container)) {
+                    const depthFormat = util.getParentElement(r.container, function (current) { return this.isRangeFormatElement(current); }.bind(util));
+                    afterNode = util.splitElement(r.container, r.offset, !depthFormat ? 0 : util.getElementDepth(depthFormat) + 1);
+                    if (afterNode) afterNode = afterNode.previousSibling;
+                }
+            }
+
             const range = this.getRange();
             const startCon = range.startContainer;
             const startOff = range.startOffset;
             const endCon = range.endContainer;
             const endOff = range.endOffset;
             const commonCon = range.commonAncestorContainer;
-            let parentNode = null;
-            let originAfter = null;
+            let parentNode, originAfter = null;
 
             if (!afterNode) {
                 parentNode = startCon;
@@ -1153,11 +1240,36 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         if (!this.isEdgePoint(startCon, startOff)) removeNode = startCon.splitText(startOff);
 
                         parentNode.removeChild(removeNode);
+                        if (parentNode.childNodes.length === 0 && isComp) {
+                            parentNode.innerHTML = '<br>';
+                        }
                     }
                     else {
-                        this.removeNode();
-                        parentNode = commonCon;
-                        afterNode = endCon;
+                        const removedTag = this.removeNode();
+                        const container = removedTag.container;
+                        const prevContainer = removedTag.prevContainer;
+                        if (container && container.childNodes.length === 0 && isComp) {
+                            if (util.isFormatElement(container)) {
+                                container.innerHTML = '<br>';
+                            } else if (util.isRangeFormatElement(container)) {
+                                container.innerHTML = '<p><br></p>';
+                            }
+                        }
+
+                        if (!isComp && prevContainer) {
+                            parentNode = prevContainer.nodeType === 3 ? prevContainer.parentNode : prevContainer;
+                            if (parentNode.contains(container)) {
+                                afterNode = container;
+                                while (afterNode.parentNode === parentNode) {
+                                    afterNode = afterNode.parentNode;
+                                }
+                            } else {
+                                afterNode = null;
+                            }
+                        } else {
+                            parentNode = isComp ? commonCon : container;
+                            afterNode = isComp ? endCon : null;
+                        }
 
                         while (afterNode && afterNode.parentNode !== commonCon) {
                             afterNode = afterNode.parentNode;
@@ -1175,22 +1287,25 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             // --- insert node ---
             try {
                 if (util.isFormatElement(oNode) || util.isRangeFormatElement(oNode) || (!util.isListCell(parentNode) && util.isComponent(oNode))) {
+                    const oldParent = parentNode;
                     if (util.isList(afterNode)) {
                         parentNode = afterNode;
                         afterNode = null;
                     } else if (!originAfter && !afterNode) {
                         const r = this.removeNode();
-                        const container = r.container.nodeType === 3 ? (util.isListCell(util.getFormatElement(r.container)) ? r.container : (util.getFormatElement(r.container) || r.container.parentNode)) : r.container;
+                        const container = r.container.nodeType === 3 ? (util.isListCell(util.getFormatElement(r.container, null)) ? r.container : (util.getFormatElement(r.container, null) || r.container.parentNode)) : r.container;
                         const rangeCon = util.isWysiwygDiv(container) || util.isRangeFormatElement(container);
                         parentNode = rangeCon ? container : container.parentNode;
                         afterNode = rangeCon ? null : container.nextSibling;
                     }
+
+                    if (oldParent.childNodes.length === 0 && parentNode !== oldParent) util.removeItem(oldParent);
                 }
 
-                if (afterNode === commonCon && util.isBreak(afterNode) && !util.isBreak(oNode)) {
-                    afterNode = afterNode.nextSibling;
+                if (isComp && !util.isRangeFormatElement(parentNode) && !util.isListCell(parentNode) && !util.isWysiwygDiv(parentNode)) {
+                    afterNode = parentNode.nextElementSibling;
+                    parentNode = parentNode.parentNode;
                 }
-
                 parentNode.insertBefore(oNode, afterNode);
             } catch (e) {
                 parentNode.appendChild(oNode);
@@ -1242,7 +1357,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
         /**
          * @description Delete the currently selected nodes and reset selection range
-         * Returns {container: "the last element after deletion", offset: "offset"}
+         * Returns {container: "the last element after deletion", offset: "offset", prevContainer: "previousElementSibling Of the deleted area"}
          * @returns {Object}
          */
         removeNode: function () {
@@ -1257,7 +1372,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             let beforeNode = null;
             let afterNode = null;
 
-            const childNodes = util.getListChildNodes(commonCon);
+            const childNodes = util.getListChildNodes(commonCon, null);
             let startIndex = util.getArrayIndex(childNodes, startCon);
             let endIndex = util.getArrayIndex(childNodes, endCon);
 
@@ -1278,7 +1393,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 }
             } else {
                 if (childNodes.length === 0) {
-                    if (util.isFormatElement(commonCon) || util.isRangeFormatElement(commonCon) || util.isFormatElement(commonCon)) {
+                    if (util.isFormatElement(commonCon) || util.isRangeFormatElement(commonCon) || util.isWysiwygDiv(commonCon) || util.isBreak(commonCon) || util.isMedia(commonCon)) {
                         return {
                             container: commonCon,
                             offset: 0
@@ -1300,7 +1415,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             }
 
             function remove (item) {
-                const format = util.getFormatElement(item);
+                const format = util.getFormatElement(item, null);
                 util.removeItem(item);
 
                 if(util.isListCell(format)) {
@@ -1311,7 +1426,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         while (children[0]) {
                             format.insertBefore(children[0], list);
                         }
-                        util.removeItemAllParents(child);
+                        util.removeItemAllParents(child, null, null);
                     }
                 }
             }
@@ -1366,6 +1481,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             }
 
             container = endCon && endCon.parentNode ? endCon : startCon && startCon.parentNode ? startCon : (range.endContainer || range.startContainer);
+            
+            if (!util.isWysiwygDiv(container)) {
+                const rc = util.removeItemAllParents(container, null, null);
+                if (rc) container = rc.sc || rc.ec || context.element.wysiwyg;
+            }
 
             // set range
             this.setRange(container, offset, container, offset);
@@ -1374,7 +1494,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
             return {
                 container: container,
-                offset: offset
+                offset: offset,
+                prevContainer: startCon && startCon.parentNode ? startCon : null
             };
         },
 
@@ -1422,7 +1543,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             if (util.isRangeFormatElement(last) || util.isFormatElement(last)) {
                 standTag = last;
             } else {
-                standTag = util.getRangeFormatElement(last) || util.getFormatElement(last);
+                standTag = util.getRangeFormatElement(last, null) || util.getFormatElement(last, null);
             }
 
             if (util.isCell(standTag)) {
@@ -2042,20 +2163,25 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             };
 
             // get line nodes
-            const lineNodes = this.getSelectedElements();
+            const lineNodes = this.getSelectedElements(null);
+            range = this.getRange();
+            startCon = range.startContainer;
+            startOff = range.startOffset;
+            endCon = range.endContainer;
+            endOff = range.endOffset;
 
-            if (!util.getFormatElement(startCon)) {
-                startCon = util.getChildElement(lineNodes[0], function (current) { return current.nodeType === 3; });
+            if (!util.getFormatElement(startCon, null)) {
+                startCon = util.getChildElement(lineNodes[0], function (current) { return current.nodeType === 3; }, false);
                 startOff = 0;
             }
 
-            if (!util.getFormatElement(endCon)) {
-                endCon = util.getChildElement(lineNodes[lineNodes.length - 1], function (current) { return current.nodeType === 3; });
+            if (!util.getFormatElement(endCon, null)) {
+                endCon = util.getChildElement(lineNodes[lineNodes.length - 1], function (current) { return current.nodeType === 3; }, false);
                 endOff = endCon.textContent.length;
             }
 
             
-            const oneLine = util.getFormatElement(startCon) === util.getFormatElement(endCon);
+            const oneLine = util.getFormatElement(startCon, null) === util.getFormatElement(endCon, null);
             const endLength = lineNodes.length - (oneLine ? 0 : 1);
 
             // node Changes
@@ -2078,6 +2204,9 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 start.offset = newRange.startOffset;
                 end.container = newRange.endContainer;
                 end.offset = newRange.endOffset;
+                if (start.container === end.container && util.zeroWidthRegExp.test(start.container.textContent)) {
+                    start.offset = end.offset = 1;
+                }
             }
             // multi line 
             else {
@@ -2099,6 +2228,9 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
                 if (endLength <= 0) {
                     end = start;
+                } else if (!end.container) {
+                    end.container = start.container;
+                    end.offset = start.container.textContent.length;
                 }
             }
 
@@ -2112,7 +2244,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
         /**
          * @description Strip remove node
-         * @param {Element} removeNode The remove node
+         * @param {Node} removeNode The remove node
          * @private
          */
         _stripRemoveNode: function (removeNode) {
@@ -2153,10 +2285,10 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @description wraps text nodes of line selected text.
          * @param {Element} element The node of the line that contains the selected text node.
          * @param {Element} newInnerNode The dom that will wrap the selected text area
-         * @param {function} validation Check if the node should be stripped.
-         * @param {Element} startCon The startContainer property of the selection object.
+         * @param {Function} validation Check if the node should be stripped.
+         * @param {Node} startCon The startContainer property of the selection object.
          * @param {Number} startOff The startOffset property of the selection object.
-         * @param {Element} endCon The endContainer property of the selection object.
+         * @param {Node} endCon The endContainer property of the selection object.
          * @param {Number} endOff The endOffset property of the selection object.
          * @param {Boolean} isRemoveFormat Is the remove all formats command?
          * @param {Boolean} isRemoveNode "newInnerNode" is remove node?
@@ -2410,8 +2542,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     if (startPass) {
                         if (child.nodeType === 1 && !util.isBreak(child)) {
                             if (util._isIgnoreNodeChange(child)) {
-                                pNode.appendChild(child);
-                                i--; len--;
+                                pNode.appendChild(child.cloneNode(true));
                                 if (!collapsed) {
                                     newInnerNode = newInnerNode.cloneNode(false);
                                     pNode.appendChild(newInnerNode);
@@ -2599,12 +2730,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @description wraps first line selected text.
          * @param {Element} element The node of the line that contains the selected text node.
          * @param {Element} newInnerNode The dom that will wrap the selected text area
-         * @param {function} validation Check if the node should be stripped.
-         * @param {Element} startCon The startContainer property of the selection object.
+         * @param {Function} validation Check if the node should be stripped.
+         * @param {Node} startCon The startContainer property of the selection object.
          * @param {Number} startOff The startOffset property of the selection object.
          * @param {Boolean} isRemoveFormat Is the remove all formats command?
          * @param {Boolean} isRemoveNode "newInnerNode" is remove node?
-         * @returns {{container: *, offset: *}}
+         * @returns {Object} { container, offset }
          * @private
          */
         _nodeChange_startLine: function (element, newInnerNode, validation, startCon, startOff, isRemoveFormat, isRemoveNode, _removeCheck, _getMaintainedNode, _isMaintainedNode) {
@@ -2659,10 +2790,9 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         if (child.nodeType === 1) {
                             if (util._isIgnoreNodeChange(child)) {
                                 newInnerNode = newInnerNode.cloneNode(false);
-                                pNode.appendChild(child);
+                                pNode.appendChild(child.cloneNode(true));
                                 pNode.appendChild(newInnerNode);
                                 nNodeArray.push(newInnerNode);
-                                i--; len--;
                             } else {
                                 recursionFunc(child, child);
                             }
@@ -2877,7 +3007,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @description wraps mid lines selected text.
          * @param {Element} element The node of the line that contains the selected text node.
          * @param {Element} newInnerNode The dom that will wrap the selected text area
-         * @param {function} validation Check if the node should be stripped.
+         * @param {Function} validation Check if the node should be stripped.
          * @param {Boolean} isRemoveFormat Is the remove all formats command?
          * @param {Boolean} isRemoveNode "newInnerNode" is remove node?
          * @private
@@ -2935,11 +3065,10 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                             pNode.appendChild(newInnerNode);
                             newInnerNode = newInnerNode.cloneNode(false);
                         }
-                        pNode.appendChild(child);
+                        pNode.appendChild(child.cloneNode(true));
                         pNode.appendChild(newInnerNode);
                         nNodeArray.push(newInnerNode);
                         ancestor = newInnerNode;
-                        i--; len--;
                         continue;
                     } else {
                         vNode = validation(child);
@@ -2986,12 +3115,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @description wraps last line selected text.
          * @param {Element} element The node of the line that contains the selected text node.
          * @param {Element} newInnerNode The dom that will wrap the selected text area
-         * @param {function} validation Check if the node should be stripped.
-         * @param {Element} endCon The endContainer property of the selection object.
+         * @param {Function} validation Check if the node should be stripped.
+         * @param {Node} endCon The endContainer property of the selection object.
          * @param {Number} endOff The endOffset property of the selection object.
          * @param {Boolean} isRemoveFormat Is the remove all formats command?
          * @param {Boolean} isRemoveNode "newInnerNode" is remove node?
-         * @returns {{container: *, offset: *}}
+         * @returns {Object} { container, offset }
          * @private
          */
         _nodeChange_endLine: function (element, newInnerNode, validation, endCon, endOff, isRemoveFormat, isRemoveNode, _removeCheck, _getMaintainedNode, _isMaintainedNode) {
@@ -3046,10 +3175,10 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         if (child.nodeType === 1) {
                             if (util._isIgnoreNodeChange(child)) {
                                 newInnerNode = newInnerNode.cloneNode(false);
-                                pNode.insertBefore(child, ancestor);
-                                pNode.insertBefore(newInnerNode, child);
+                                const cloneChild = child.cloneNode(true);
+                                pNode.insertBefore(cloneChild, ancestor);
+                                pNode.insertBefore(newInnerNode, cloneChild);
                                 nNodeArray.push(newInnerNode);
-                                i++;
                             } else {
                                 recursionFunc(child, child);
                             }
@@ -3245,14 +3374,22 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     element.appendChild(container);
                 }
             } else {
+                if (!isRemoveNode && newInnerNode.textContent.length === 0) {
+                    util.removeEmptyNode(pNode, null);
+                    return {
+                        container: null,
+                        offset: 0
+                    };
+                }
+
                 util.removeEmptyNode(pNode, newInnerNode);
 
                 if (util.onlyZeroWidthSpace(pNode.textContent)) {
                     container = pNode.firstChild;
                     offset = container.textContent.length;
                 } else if (util.onlyZeroWidthSpace(container)) {
-                    container = pNode;
-                    offset = 0;
+                    container = newInnerNode;
+                    offset = 1;
                 }
                 
                 // node change
@@ -3326,12 +3463,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     this.focus();
                     break;
                 case 'codeView':
-                    this.toggleCodeView();
                     util.toggleClass(target, 'active');
+                    this.toggleCodeView();
                     break;
                 case 'fullScreen':
-                    this.toggleFullScreen(target);
                     util.toggleClass(target, 'active');
+                    this.toggleFullScreen(target);
                     break;
                 case 'indent':
                 case 'outdent':
@@ -3354,8 +3491,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     this.preview();
                     break;
                 case 'showBlocks':
-                    this.toggleDisplayBlocks();
                     util.toggleClass(target, 'active');
+                    this.toggleDisplayBlocks();
                     break;
                 case 'save':
                     if (typeof options.callBackSave === 'function') {
@@ -3368,7 +3505,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
                     if (context.tool.save) context.tool.save.setAttribute('disabled', true);
                     break;
-                default : // 'STRONG', 'INS', 'EM', 'DEL', 'SUB', 'SUP'
+                default : // 'STRONG', 'U', 'EM', 'DEL', 'SUB', 'SUP'
                     command = this._defaultCommand[command.toLowerCase()] || command;
                     if (!this.commandMap[command]) this.commandMap[command] = target;
 
@@ -3400,7 +3537,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          */
         indent: function (command) {
             const range = this.getRange();
-            const rangeLines = this.getSelectedElements();
+            const rangeLines = this.getSelectedElements(null);
             const cells = [];
             const shift = 'indent' !== command;
             let sc = range.startContainer;
@@ -3438,19 +3575,6 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             this.history.push(false);
         },
 
-
-        /**
-         * @description In the predefined code view mode, the buttons except the executable button are changed to the 'disabled' state.
-         * core.codeViewDisabledButtons (An array of buttons whose class name is not "code-view-enabled")
-         * @param {Boolean} disabled Disabled value
-         */
-        toggleDisabledButtons: function (disabled) {
-            const disButtons = this.codeViewDisabledButtons;
-            for (let i = 0, len = disButtons.length; i < len; i++) {
-                disButtons[i].disabled = disabled;
-            }
-        },
-
         /**
          * @description Add or remove the class name of "body" so that the code block is visible
          */
@@ -3464,8 +3588,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          */
         toggleCodeView: function () {
             const isCodeView = this._variable.isCodeView;
-            this.toggleDisabledButtons(!isCodeView);
             this.controllersOff();
+            util.toggleDisabledButtons(!isCodeView, this.codeViewDisabledButtons);
 
             if (isCodeView) {
                 this._setCodeDataToEditor();
@@ -3490,9 +3614,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     }
                 }
 
-                this._resourcesStateChange();
-                this._checkComponents();
-                this._nativeFocus();
+                this.nativeFocus();
 
                 // history stack
                 this.history.push(false);
@@ -3588,6 +3710,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const wysiwygFrame = context.element.wysiwygFrame;
             const code = context.element.code;
             const _var = this._variable;
+            this.controllersOff();
 
             if (!_var.isFullScreen) {
                 _var.isFullScreen = true;
@@ -3630,7 +3753,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 _var.innerHeight_fullScreen = (_w.innerHeight - toolbar.offsetHeight);
                 editorArea.style.height = _var.innerHeight_fullScreen + 'px';
 
-                util.changeIcon(element.querySelector('svg'), icons.reduction);
+                util.changeElement(element.querySelector('svg'), icons.reduction);
 
                 if (options.iframe && options.height === 'auto') {
                     editorArea.style.overflow = 'auto';
@@ -3662,7 +3785,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 if (this._isInline) event._showToolbarInline();
 
                 event.onScroll_window();
-                util.changeIcon(element.querySelector('svg'), icons.expansion);
+                util.changeElement(element.querySelector('svg'), icons.expansion);
             }
         },
 
@@ -3803,6 +3926,42 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         /**
+         * @description Returns HTML string according to tag type and configuration.
+         * Use only "cleanHTML", "convertContentsForEditor"
+         * @param {Node} node Node
+         * @param {Boolean} requireFormat If true, text nodes that do not have a format node is wrapped with the format tag.
+         * @private
+         */
+        _makeLine: function (node, requireFormat) {
+            // element
+            if (node.nodeType === 1) {
+                if (util._notAllowedTags(node)) return '';
+                if (!requireFormat || (util.isFormatElement(node) || util.isRangeFormatElement(node) || util.isComponent(node) || util.isMedia(node) || (util.isAnchor(node) && util.isMedia(node.firstElementChild)))) {
+                    return node.outerHTML;
+                } else {
+                    return '<p>' + node.outerHTML + '</p>';
+                }
+            }
+            // text
+            if (node.nodeType === 3) {
+                if (!requireFormat) return node.textContent;
+                const textArray = node.textContent.split(/\n/g);
+                let html = '';
+                for (let i = 0, tLen = textArray.length, text; i < tLen; i++) {
+                    text = textArray[i].trim();
+                    if (text.length > 0) html += '<p>' + text + '</p>';
+                }
+                return html;
+            }
+            // comments
+            if (node.nodeType === 8 && this._allowHTMLComments) {
+                return '<__comment__>' + node.textContent.trim() + '</__comment__>';
+            }
+
+            return '';
+        },
+
+        /**
          * @description Gets the clean HTML code for editor
          * @param {String} html HTML string
          * @param {String|RegExp} whitelist Regular expression of allowed tags.
@@ -3810,25 +3969,35 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @returns {String}
          */
         cleanHTML: function (html, whitelist) {
-            const tagsAllowed = new this._w.RegExp('^(meta|script|link|style|[a-z]+\:[a-z]+)$', 'i');
-            const domTree = this._d.createRange().createContextualFragment(html).childNodes;
+            const dom = _d.createRange().createContextualFragment(html);
+            try {
+                util._consistencyCheckOfHTML(dom, this._htmlCheckWhitelistRegExp);
+            } catch (error) {
+                console.warn('[SUNEDITOR.cleanHTML.consistencyCheck.fail] ' + error);
+            }
+            
+            const domTree = dom.childNodes;
             let cleanHTML = '';
+            let requireFormat = false;
 
             for (let i = 0, len = domTree.length, t; i < len; i++) {
                 t = domTree[i];
-                if (t.nodeType === 8 && this._allowHTMLComments) {
-                    cleanHTML += '<__comment__>' + t.textContent.trim() + '</__comment__>';
-                } else if (!tagsAllowed.test(t.nodeName)) {
-                    cleanHTML += t.nodeType === 1 ? t.outerHTML : t.nodeType === 3 ? t.textContent : '';
+                if (t.nodeType === 1 && !util.isTextStyleElement(t) && !util.isBreak(t) && !util._notAllowedTags(t)) {
+                    requireFormat = true;
+                    break;
                 }
+            }
+
+            for (let i = 0, len = domTree.length; i < len; i++) {
+                cleanHTML += this._makeLine(domTree[i], requireFormat);
             }
 
             cleanHTML = cleanHTML
                 .replace(/\n/g, '')
                 .replace(/<(script|style).*>(\n|.)*<\/(script|style)>/g, '')
                 .replace(this.editorTagsWhitelistRegExp, '')
-                .replace('<__comment__>', '<!-- ')
-                .replace('</__comment__>', ' -->')
+                .replace(/<__comment__>/g, '<!-- ')
+                .replace(/<\/__comment__>/g, ' -->')
                 .replace(/(<[a-zA-Z0-9]+)[^>]*(?=>)/g, function (m, t) {
                     let v = null;
                     const tAttr = this._attributesTagsWhitelist[t.match(/(?!<)[a-zA-Z]+/)[0].toLowerCase()];
@@ -3852,76 +4021,32 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         /**
-         * @description Add an event to document.
-         * When created as an Iframe, the same event is added to the document in the Iframe.
-         * @param {String} type Event type
-         * @param {Function} listener Event listener
-         * @param {Boolean} useCapture Use event capture
-         */
-        addDocEvent: function (type, listener, useCapture) {
-            _d.addEventListener(type, listener, useCapture);
-            if (options.iframe) {
-                this._wd.addEventListener(type, listener);
-            }
-        },
-
-        /**
-         * @description Remove events from document.
-         * When created as an Iframe, the event of the document inside the Iframe is also removed.
-         * @param {String} type Event type
-         * @param {Function} listener Event listener
-         */
-        removeDocEvent: function (type, listener) {
-            _d.removeEventListener(type, listener);
-            if (options.iframe) {
-                this._wd.removeEventListener(type, listener);
-            }
-        },
-
-        /**
          * @description Converts contents into a format that can be placed in an editor
          * @param {String} contents contents
          * @returns {String}
          */
         convertContentsForEditor: function (contents) {
+            const dom = _d.createRange().createContextualFragment(contents);
+            try {
+                util._consistencyCheckOfHTML(dom, this._htmlCheckWhitelistRegExp);
+            } catch (error) {
+                console.warn('[SUNEDITOR.convertContentsForEditor.consistencyCheck.fail] ' + error);
+            }
+            
             let returnHTML = '';
-            let tag = this._d.createRange().createContextualFragment(contents).childNodes;
-
-            for (let i = 0, len = tag.length, baseHtml, t; i < len; i++) {
-                t = tag[i];
-                
-                if (t.nodeType === 8) {
-                    if (this._allowHTMLComments) {
-                        baseHtml = '<__comment__>' + t.textContent.trim() + '</__comment__>';
-                    } else {
-                        continue;
-                    }
-                } else {
-                    baseHtml = t.outerHTML || t.textContent;
-                }
-
-                if (t.nodeType === 3) {
-                    const textArray = baseHtml.split(/\n/g);
-                    let text = '';
-                    for (let t = 0, tLen = textArray.length; t < tLen; t++) {
-                        text = textArray[t].trim();
-                        if (text.length > 0) returnHTML += '<p>' + text + '</p>';
-                    }
-                } else {
-                    returnHTML += util.htmlRemoveWhiteSpace(baseHtml);
-                }
+            const domTree = dom.childNodes;
+            for (let i = 0, len = domTree.length; i < len; i++) {
+                returnHTML += this._makeLine(domTree[i], true);
             }
 
-            if (returnHTML.length === 0) {
-                contents = util._HTMLConvertor(contents);
-                return '<p>' + (contents.length > 0 ? contents : '<br>') + '</p>';
-            }
+            if (returnHTML.length === 0) return '<p><br></p>';
 
+            returnHTML = util.htmlRemoveWhiteSpace(returnHTML);
             returnHTML = returnHTML
                 .replace(this.editorTagsWhitelistRegExp, '')
                 .replace(/\n/g, '')
-                .replace('<__comment__>', '<!-- ')
-                .replace('</__comment__>', ' -->');
+                .replace(/<__comment__>/g, '<!-- ')
+                .replace(/<\/__comment__>/g, ' -->');
 
             return util._tagConvertor(returnHTML);
         },
@@ -3933,13 +4058,13 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          */
         convertHTMLForCodeView: function (html) {
             let returnHTML = '';
-            const reg = this._w.RegExp;
+            const reg = _w.RegExp;
             const brReg = new reg('^(BLOCKQUOTE|PRE|TABLE|THEAD|TBODY|TR|TH|TD|OL|UL|IMG|IFRAME|VIDEO|AUDIO|FIGURE|FIGCAPTION|HR|BR|CANVAS|SELECT)$', 'i');
             const isFormatElement = util.isFormatElement.bind(util);
-            const wDoc = typeof html === 'string' ? this._d.createRange().createContextualFragment(html) : html;
+            const wDoc = typeof html === 'string' ? _d.createRange().createContextualFragment(html) : html;
 
             let indentSize = this._variable.codeIndent * 1;
-            indentSize = indentSize > 0 ? new this._w.Array(indentSize + 1).join(' ') : '';
+            indentSize = indentSize > 0 ? new _w.Array(indentSize + 1).join(' ') : '';
 
             (function recursionFunc (element, indent, lineBR) {
                 const children = element.childNodes;
@@ -3977,6 +4102,33 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         /**
+         * @description Add an event to document.
+         * When created as an Iframe, the same event is added to the document in the Iframe.
+         * @param {String} type Event type
+         * @param {Function} listener Event listener
+         * @param {Boolean} useCapture Use event capture
+         */
+        addDocEvent: function (type, listener, useCapture) {
+            _d.addEventListener(type, listener, useCapture);
+            if (options.iframe) {
+                this._wd.addEventListener(type, listener);
+            }
+        },
+
+        /**
+         * @description Remove events from document.
+         * When created as an Iframe, the event of the document inside the Iframe is also removed.
+         * @param {String} type Event type
+         * @param {Function} listener Event listener
+         */
+        removeDocEvent: function (type, listener) {
+            _d.removeEventListener(type, listener);
+            if (options.iframe) {
+                this._wd.removeEventListener(type, listener);
+            }
+        },
+
+        /**
          * @description The current number of characters is counted and displayed.
          * @param {String} inputText Text added.
          * @returns {Boolean}
@@ -3985,17 +4137,16 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         _charCount: function (inputText) {
             const charCounter = context.element.charCounter;
             const maxCharCount = options.maxCharCount;
-            const wysiwyg = context.element.wysiwyg;
             let nextCharCount = 0;
-            if (!!inputText) nextCharCount = core._getCharLength(inputText);
+            if (!!inputText) nextCharCount = core._getCharLength(inputText, options.charCounterType);
 
             if (charCounter) {
-                _w.setTimeout(function () { charCounter.textContent = core._getCharLength(wysiwyg.textContent); });
+                _w.setTimeout(function () { charCounter.textContent = functions.getCharCount(null); });
             }
 
             if (maxCharCount > 0) {
                 let over = false;
-                const count = core._getCharLength(wysiwyg.textContent);
+                const count = functions.getCharCount(null);
                 
                 if (count > maxCharCount) {
                     over = true;
@@ -4032,10 +4183,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         /**
          * @description Method used only in "_charCount".
          * Depending on the option, the length of the character is taken.
-         * @param {String} text Text content
+         * @param {String} content Content to count
+         * @param {String} charCounterType option - charCounterType
+         * @returns {Number}
          */
-        _getCharLength: function (text) {
-            return options.charCounterType === 'byte' ? util.getByteLength(text) : text.length;
+        _getCharLength: function (content, charCounterType) {
+            return /byte/.test(charCounterType) ? util.getByteLength(content) : content.length;
         },
 
         /**
@@ -4043,14 +4196,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @private
          */
         _checkComponents: function () {
-            if (this.plugins.image) {
-                if (!this.initPlugins.image) this.callPlugin('image', this.plugins.image.checkImagesInfo.bind(this));
-                else this.plugins.image.checkImagesInfo.call(this);
-            }
-
-            if (this.plugins.video) {
-                if (!this.initPlugins.video) this.callPlugin('video', this.plugins.video.checkVideosInfo.bind(this));
-                else this.plugins.video.checkVideosInfo.call(this);
+            for (let i in this.componentInfoPlugins) {
+                this.componentInfoPlugins[i].checkComponentInfo.call(this);
             }
         },
 
@@ -4059,9 +4206,9 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @private
          */
         _resetComponents: function () {
-            this._variable._imagesInfo = [];
-            this._variable._imageIndex = 0;
-            this._variable._videosCnt = 0;
+            for (let i in this.componentInfoPlugins) {
+                this.componentInfoPlugins[i].resetComponentInfo.call(this);
+            }
         },
 
         /**
@@ -4093,10 +4240,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          */
         _init: function (reload, _initHTML) {
             this._ww = options.iframe ? context.element.wysiwygFrame.contentWindow : _w;
-            this._wd = options.iframe ? util.getIframeDocument(context.element.wysiwygFrame) : _d;
+            this._wd = _d;
             if (options.iframe && options.height === 'auto') this._iframeAuto = this._wd.body;
             
             this._allowHTMLComments = options._editorTagsWhitelist.indexOf('//') > -1;
+            this._htmlCheckWhitelistRegExp = new _w.RegExp('^(' + options._editorTagsWhitelist.replace('|//', '') + ')$', 'i');
             this.editorTagsWhitelistRegExp = util.createTagsWhitelist(options._editorTagsWhitelist.replace('|//', '|__comment__'));
             this.pasteTagsWhitelistRegExp = util.createTagsWhitelist(options.pasteTagsWhitelist);
 
@@ -4116,14 +4264,15 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             this._attributesWhitelistRegExp = new _w.RegExp('((?:' + allAttr + 'contenteditable|colspan|rowspan|target|href|src|class|type|data-format|data-size|data-file-size|data-file-name|data-origin|data-align|data-image-link|data-rotate|data-proportion|data-percentage|origin-size)\s*=\s*"[^"]*")', 'ig');
             this._attributesTagsWhitelist = tagsAttr;
 
-            this.codeViewDisabledButtons = context.element.toolbar.querySelectorAll('.se-toolbar button:not([class~="code-view-enabled"])');
+            this.codeViewDisabledButtons = context.element.toolbar.querySelectorAll('.se-toolbar button:not([class~="se-code-view-enabled"])');
+            this.resizingDisabledButtons = context.element.toolbar.querySelectorAll('.se-toolbar button:not([class~="se-resizing-enabled"])');
             this._isInline = /inline/i.test(options.mode);
             this._isBalloon = /balloon|balloon-always/i.test(options.mode);
             this._isBalloonAlways = /balloon-always/i.test(options.mode);
 
             this.commandMap = {
                 STRONG: context.tool.bold,
-                INS: context.tool.underline,
+                U: context.tool.underline,
                 EM: context.tool.italic,
                 DEL: context.tool.strike,
                 SUB: context.tool.subscript,
@@ -4134,31 +4283,45 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
             // Command plugins registration
             this.activePlugins = [];
+            this.componentInfoPlugins = [];
             let c, button;
             for (let key in plugins) {
                 c = plugins[key];
                 button = pluginCallButtons[key];
                 if (c.active && button) {
-                    core.callPlugin(key, null, button);
+                    this.callPlugin(key, null, button);
+                }
+                if (typeof c.checkComponentInfo === 'function' && typeof c.resetComponentInfo === 'function') {
+                    this.callPlugin(key, null, button);
+                    this.componentInfoPlugins.push(c);
                 }
             }
 
             this._variable._originCssText = context.element.topArea.style.cssText;
             this._placeholder = context.element.placeholder;
+            this._lineBreaker = context.element.lineBreaker;
+            this._lineBreakerButton = this._lineBreaker.querySelector('button');
 
             // Excute history function
             this.history = _history(this, event._onChange_historyStack);
 
             // Init, validate
-            this._initWysiwygArea(reload, _initHTML);
+            if (!options.iframe) this._initWysiwygArea(reload, _initHTML);
             _w.setTimeout(function () {
+                // after iframe loaded
+                if (options.iframe) {
+                    this._wd = context.element.wysiwygFrame.contentDocument;
+                    context.element.wysiwyg = this._wd.body;
+                    this._initWysiwygArea(reload, _initHTML);
+                    if (options.height === 'auto') this._iframeAuto = this._wd.body;
+                }
+
                 this._checkComponents();
-                this._imagesInfoInit = false;
-                this._imagesInfoReset = false;
+                this._componentsInfoInit = false;
+                this._componentsInfoReset = false;
                 
                 this.history.reset(true);
-                this._iframeAutoHeight();
-                this._checkPlaceholder();
+                this._resourcesStateChange();
 
                 if (typeof functions.onload === 'function') return functions.onload(this, reload);
             }.bind(this));
@@ -4228,17 +4391,24 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @private
          */
         _setDefaultFormat: function (formatName) {
-            const commonCon = this.getRange().commonAncestorContainer;
-            const rangeEl = util.getRangeFormatElement(commonCon);
+            if (!!this._resizingName) return;
+
+            const range = this.getRange();
+            const commonCon = range.commonAncestorContainer;
+            const startCon = range.startContainer;
+            const rangeEl = util.getRangeFormatElement(commonCon, null);
             let focusNode, offset, format;
+
+            if (util.getParentElement(commonCon, util.isComponent)) return;
+            if((util.isRangeFormatElement(startCon) || util.isWysiwygDiv(startCon)) && util.isComponent(startCon.childNodes[range.startOffset])) return;
 
             if (rangeEl) {
                 format = util.createElement(formatName || 'P');
                 format.innerHTML = rangeEl.innerHTML;
-                if (format.childNodes.length === 0) format.innerHTML = '<br>';
+                if (format.childNodes.length === 0) format.innerHTML = util.zeroWidthSpace;
 
                 rangeEl.innerHTML = format.outerHTML;
-                format = rangeEl.firstElementChild;
+                format = rangeEl.firstChild;
                 focusNode = util.getEdgeChildNodes(format, null).sc;
 
                 if (!focusNode) {
@@ -4256,17 +4426,17 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 if (commonCon.childNodes.length === 1 && util.isBreak(commonCon.firstChild)) {
                     br = commonCon.firstChild;
                 } else {
-                    br = util.createElement('BR');
+                    br = util.createTextNode(util.zeroWidthSpace);
                     commonCon.appendChild(br);
                 }
-                this.setRange(br, 0, br, 0);
+                this.setRange(br, 1, br, 1);
             }
 
             this.execCommand('formatBlock', false, (formatName || 'P'));
             focusNode = util.getEdgeChildNodes(commonCon, commonCon);
             focusNode = focusNode ? focusNode.ec : commonCon;
 
-            format = util.getFormatElement(focusNode);
+            format = util.getFormatElement(focusNode, null);
             if (!format) {
                 this.removeRange();
                 this._editorRange();
@@ -4282,6 +4452,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             }
 
             offset = focusNode.nodeType === 3 ? focusNode.textContent.length : 1;
+            this.effectNode = null;
             this.setRange(focusNode, offset, focusNode, offset);
         }
     };
@@ -4293,7 +4464,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         _directionKeyCode: new _w.RegExp('^(8|13|3[2-9]|40|46)$'),
         _nonTextKeyCode: new _w.RegExp('^(8|13|1[6-9]|20|27|3[3-9]|40|45|46|11[2-9]|12[0-3]|144|145)$'),
         _historyIgnoreKeyCode: new _w.RegExp('^(1[6-9]|20|27|3[3-9]|40|45|11[2-9]|12[0-3]|144|145)$'),
-        _onButtonsCheck: new _w.RegExp('^(STRONG|INS|EM|DEL|SUB|SUP)$'),
+        _onButtonsCheck: new _w.RegExp('^(STRONG|U|EM|DEL|SUB|SUP)$'),
         _frontZeroWidthReg: new _w.RegExp(util.zeroWidthSpace + '+', ''),
         _keyCodeShortcut: {
             65: 'A',
@@ -4324,7 +4495,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     }
                     break;
                 case 'U':
-                    command = 'INS';
+                    command = 'U';
                     break;
                 case 'I':
                     command = 'EM';
@@ -4444,7 +4615,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             let target = e.target;
             if (core._bindControllersOff) e.stopPropagation();
 
-            if (/^input|textarea$/i.test(target.nodeName)) {
+            if (/^(input|textarea|select|option)$/i.test(target.nodeName)) {
                 core._antiBlur = false;
             } else {
                 e.preventDefault();
@@ -4470,15 +4641,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         onClick_toolbar: function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-
             let target = e.target;
             let display = target.getAttribute('data-display');
             let command = target.getAttribute('data-command');
             let className = target.className;
 
-            while (!command && !/se-menu-list/.test(className) && !/se-toolbar/.test(className)) {
+            while (target.parentNode && !command && !/se-menu-list/.test(className) && !/se-toolbar/.test(className)) {
                 target = target.parentNode;
                 command = target.getAttribute('data-command');
                 display = target.getAttribute('data-display');
@@ -4487,15 +4655,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
             if (!command && !display) return;
             if (target.disabled) return;
-            
-            if (!core.hasFocus) core.focus();
-            core._editorRange();
+            if (!core.hasFocus) core.nativeFocus();
+            if (!core._variable.isCodeView) core._editorRange();
+
             core.actionCall(command, display, target);
         },
 
-        /**
-         * @warning Events are registered only when there is a table plugin.
-         */
         onMouseDown_wysiwyg: function (e) {
             if (context.element.wysiwyg.getAttribute('contenteditable') === 'false') return;
             
@@ -4505,7 +4670,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 if (tablePlugin && tableCell !== tablePlugin._fixedCell && !tablePlugin._shift) {
                     core.callPlugin('table', function () {
                         tablePlugin.onTableCellMultiSelect.call(core, tableCell, false);
-                    });
+                    }, null);
                 }
             }
 
@@ -4519,8 +4684,6 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         onClick_wysiwyg: function (e) {
             const targetElement = e.target;
             if (context.element.wysiwyg.getAttribute('contenteditable') === 'false') return;
-
-            e.stopPropagation();
 
             if (/^FIGURE$/i.test(targetElement.nodeName)) {
                 const imageComponent = targetElement.querySelector('IMG');
@@ -4555,13 +4718,13 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 }
             }
 
-            core._editorRange();
             _w.setTimeout(core._editorRange.bind(core));
+            core._editorRange();
 
             const selectionNode = core.getSelectionNode();
-            const formatEl = util.getFormatElement(selectionNode);
-            const rangeEl = util.getRangeFormatElement(selectionNode);
-            if (core.getRange().collapsed && (!formatEl || formatEl === rangeEl) && targetElement.getAttribute('contenteditable') !== 'false') {
+            const formatEl = util.getFormatElement(selectionNode, null);
+            const rangeEl = util.getRangeFormatElement(selectionNode, null);
+            if ((!formatEl || formatEl === rangeEl) && targetElement.getAttribute('contenteditable') !== 'false') {
                 if (util.isList(rangeEl)) {
                     const oLi = util.createElement('LI');
                     const prevLi = selectionNode.nextElementSibling;
@@ -4572,7 +4735,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 }
                 e.preventDefault();
                 core.focus();
-            } else {                
+            } else {
                 event._applyTagEffects();
             }
 
@@ -4613,7 +4776,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             } else if (selection.focusNode === selection.anchorNode) {
                 isDirTop = selection.focusOffset < selection.anchorOffset;
             } else {
-                const childNodes = util.getListChildNodes(range.commonAncestorContainer);
+                const childNodes = util.getListChildNodes(range.commonAncestorContainer, null);
                 isDirTop = util.getArrayIndex(childNodes, selection.focusNode) < util.getArrayIndex(childNodes, selection.anchorNode);
             }
 
@@ -4630,14 +4793,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             }
 
             const editorWidth = context.element.topArea.offsetWidth;
-            const stickyTop = event._getStickyOffsetTop();
-            let editorLeft = 0;
-            let topArea = context.element.topArea;
-            while (topArea && !/^(BODY|HTML)$/i.test(topArea.nodeName)) {
-                editorLeft += topArea.offsetLeft;
-                topArea = topArea.offsetParent;
-            }
+            const offsets = event._getEditorOffsets();
+            const stickyTop = offsets.top;
+            const editorLeft = offsets.left;
             
+            toolbar.style.top = '-10000px';
             toolbar.style.visibility = 'hidden';
             toolbar.style.display = 'block';
 
@@ -4667,7 +4827,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
                 isDirTop = true;
             }
-            
+
             const arrowMargin = _w.Math.round(context.element._arrow.offsetWidth / 2);
             const toolbarWidth = toolbar.offsetWidth;
             const toolbarHeight = toolbar.offsetHeight;
@@ -4697,8 +4857,20 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const absoluteLeft = (isDirTop ? rects.left : rects.right) - editorLeft - (toolbarWidth / 2) + scrollLeft;
             const overRight = absoluteLeft + toolbarWidth - editorWidth;
             
-            const t = (isDirTop ? rects.top - toolbarHeight - arrowMargin : rects.bottom + arrowMargin) - (rects.noText ? 0 : stickyTop) + scrollTop;
+            let t = (isDirTop ? rects.top - toolbarHeight - arrowMargin : rects.bottom + arrowMargin) - (rects.noText ? 0 : stickyTop) + scrollTop;
             let l = absoluteLeft < 0 ? padding : overRight < 0 ? absoluteLeft : absoluteLeft - overRight - padding - 1;
+
+            let resetTop = false;
+            const space = t + (isDirTop ? (event._getEditorOffsets().top) : (toolbar.offsetHeight - context.element.wysiwyg.offsetHeight));
+            if (!isDirTop && space > 0 && event._getPageBottomSpace() < space) {
+                isDirTop = true;
+                resetTop = true;
+            } else if (isDirTop && _d.documentElement.offsetTop > space) {
+                isDirTop = false;
+                resetTop = true;
+            }
+
+            if (resetTop) t = (isDirTop ? rects.top - toolbarHeight - arrowMargin : rects.bottom + arrowMargin) - (rects.noText ? 0 : stickyTop) + scrollTop;
 
             toolbar.style.left = _w.Math.floor(l) + 'px';
             toolbar.style.top = _w.Math.floor(t) + 'px';
@@ -4743,18 +4915,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         onInput_wysiwyg: function (e) {
             core._editorRange();
 
-            const range = core.getRange();
-            const selectRange = !range.collapsed || range.startContainer !== range.endContainer;
-            const data = (e.data === null ? '' : e.data === undefined ? ' ' : e.data) || '';
-            
+            const data = (e.data === null ? '' : e.data === undefined ? ' ' : e.data) || '';       
             if (!core._charCount(data)) {
                 e.preventDefault();
                 e.stopPropagation();
             }
 
-            // component check
-            if (selectRange || !data) core._checkComponents();
-            
             // history stack
             core.history.push(true);
 
@@ -4769,7 +4935,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const alt = e.altKey;
 
             core.submenuOff();
-            if (!event._directionKeyCode.test(keyCode)) _w.setTimeout(core._resourcesStateChange);
+
             if (core._isBalloon) {
                 event._hideToolbar();
             }
@@ -4789,8 +4955,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const range = core.getRange();
             const selectRange = !range.collapsed || range.startContainer !== range.endContainer;
             const resizingName = core._resizingName;
-            let formatEl = util.getFormatElement(selectionNode) || selectionNode;
-            let rangeEl = util.getRangeFormatElement(formatEl);
+            let formatEl = util.getFormatElement(selectionNode, null) || selectionNode;
+            let rangeEl = util.getRangeFormatElement(formatEl, null);
 
             switch (keyCode) {
                 case 8: /** backspace key */
@@ -4810,8 +4976,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         return false;
                     }
 
-                    if (!formatEl.nextElementSibling && !formatEl.previousElementSibling && (util.isWysiwygDiv(formatEl.parentNode) && util.isFormatElement(formatEl) && !util.isListCell(formatEl) &&
-                     (formatEl.childNodes.length <= 1 && (!formatEl.firstChild || util.onlyZeroWidthSpace(formatEl.firstChild.textContent))))) {
+                    if (!selectRange && !formatEl.previousElementSibling && (util.isWysiwygDiv(formatEl.parentNode) && (util.isFormatElement(formatEl) && !util.isFreeFormatElement(formatEl)) && !util.isListCell(formatEl) &&
+                     (formatEl.childNodes.length <= 1 && (!formatEl.firstChild || util.onlyZeroWidthSpace(formatEl.textContent))))) {
                         e.preventDefault();
                         e.stopPropagation();
                         formatEl.innerHTML = '<br>';
@@ -4819,7 +4985,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         while (attrs[0]) {
                             formatEl.removeAttribute(attrs[0].name);
                         }
-                        core.execCommand('formatBlock', false, 'P');
+                        core.nativeFocus();
                         return false;
                     }
 
@@ -4841,7 +5007,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                                 }
                             }
 
-                            util.removeItem(selectionNode.parentNode);
+                            selectionNode.textContent = '';
+                            util.removeItemAllParents(selectionNode, null, formatEl);
                             offset = typeof offset === 'number' ? offset : prev.nodeType === 3 ? prev.textContent.length : 1;
                             core.setRange(prev, offset, prev, offset);
                             break;
@@ -4850,11 +5017,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
                     // nested list
                     const commonCon = range.commonAncestorContainer;
-                    formatEl = util.getFormatElement(range.startContainer);
-                    rangeEl = util.getRangeFormatElement(formatEl);
+                    formatEl = util.getFormatElement(range.startContainer, null);
+                    rangeEl = util.getRangeFormatElement(formatEl, null);
                     if (rangeEl && formatEl && !util.isCell(rangeEl) && !/^FIGCAPTION$/i.test(rangeEl.nodeName)) {
                         if (util.isListCell(formatEl) && util.isList(rangeEl) && (util.isListCell(rangeEl.parentNode) || formatEl.previousElementSibling) && (selectionNode === formatEl || (selectionNode.nodeType === 3 && (!selectionNode.previousSibling || util.isList(selectionNode.previousSibling)))) &&
-                         (util.getFormatElement(range.startContainer) !== util.getFormatElement(range.endContainer) ? rangeEl.contains(range.startContainer) : (range.startOffset === 0  && range.collapsed))) {
+                         (util.getFormatElement(range.startContainer, null) !== util.getFormatElement(range.endContainer, null) ? rangeEl.contains(range.startContainer) : (range.startOffset === 0  && range.collapsed))) {
                             if (range.startContainer !== range.endContainer) {
                                 e.preventDefault();
 
@@ -4931,13 +5098,18 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     // component
                     if (!selectRange && range.startOffset === 0) {
                         if (util.isComponent(commonCon.previousSibling) || (commonCon.nodeType === 3 && !commonCon.previousSibling && range.startOffset === 0 && range.endOffset === 0 && util.isComponent(formatEl.previousSibling))) {
-                            const previousEl = formatEl.previousSibling;
-                            util.removeItem(previousEl);
+                            let previousEl = formatEl.previousSibling;
+                            if (util.hasClass(previousEl, 'se-image-container') || /^IMG$/i.test(previousEl.nodeName)) {
+                                previousEl = /^IMG$/i.test(previousEl.nodeName) ? previousEl : previousEl.querySelector('img');
+                                core.selectComponent(previousEl, 'image');
+                                if(formatEl.textContent.length === 0) util.removeItem(formatEl);
+                            } else if (util.hasClass(previousEl, 'se-video-container')) {
+                                core.selectComponent(previousEl.querySelector('iframe'), 'video');
+                                if(formatEl.textContent.length === 0) util.removeItem(formatEl);
+                            }
                             break;
                         }
                     }
-
-                    if (selectRange) event._rangedeleteAssistant(range.startContainer, range.endContainer);
 
                     break;
                 case 46: /** delete key */
@@ -4961,9 +5133,17 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
                             if (util.onlyZeroWidthSpace(formatEl)) {
                                 util.removeItem(formatEl);
+                                // table component
+                                if (util.isTable(nextEl)) {
+                                    let cell = util.getChildElement(nextEl, util.isCell, false);
+                                    cell = cell.firstElementChild || cell;
+                                    core.setRange(cell, 0, cell, 0);
+                                    break;
+                                }
                             }
 
-                            if (util.hasClass(nextEl, 'se-component') || /^IMG$/i.test(nextEl.nodeName)) {
+                            // resizing component
+                            if (util.hasClass(nextEl, 'se-component') || /^(IMG|IFRAME)$/i.test(nextEl.nodeName)) {
                                 e.stopPropagation();
                                 if (util.hasClass(nextEl, 'se-image-container') || /^IMG$/i.test(nextEl.nodeName)) {
                                     nextEl = /^IMG$/i.test(nextEl.nodeName) ? nextEl : nextEl.querySelector('img');
@@ -4972,15 +5152,16 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                                     core.selectComponent(nextEl.querySelector('iframe'), 'video');
                                 }
                             }
+
                             break;
                         }
                     }
 
                     // nested list
-                    formatEl = util.getFormatElement(range.startContainer);
-                    rangeEl = util.getRangeFormatElement(formatEl);
+                    formatEl = util.getFormatElement(range.startContainer, null);
+                    rangeEl = util.getRangeFormatElement(formatEl, null);
                     if (util.isListCell(formatEl) && util.isList(rangeEl) && (selectionNode === formatEl || (selectionNode.nodeType === 3 && (!selectionNode.nextSibling || util.isList(selectionNode.nextSibling)) &&
-                     (util.getFormatElement(range.startContainer) !== util.getFormatElement(range.endContainer) ? rangeEl.contains(range.endContainer) : (range.endOffset === selectionNode.textContent.length && range.collapsed))))) {
+                     (util.getFormatElement(range.startContainer, null) !== util.getFormatElement(range.endContainer, null) ? rangeEl.contains(range.endContainer) : (range.endOffset === selectionNode.textContent.length && range.collapsed))))) {
                         if (range.startContainer !== range.endContainer) core.removeNode();
                         
                         let next = util.getArrayItem(formatEl.children, util.isList, false);
@@ -5012,15 +5193,14 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         break;
                     }
 
-                    if (selectRange) event._rangedeleteAssistant(range.startContainer, range.endContainer);
-
                     break;
                 case 9: /** tab key */
+                    if (resizingName) break;
                     e.preventDefault();
                     if (ctrl || alt || util.isWysiwygDiv(selectionNode)) break;
 
                     const isEdge = (!range.collapsed || core.isEdgePoint(range.startContainer, range.startOffset));            
-                    const selectedFormats = core.getSelectedElements();
+                    const selectedFormats = core.getSelectedElements(null);
                     selectionNode = core.getSelectionNode();
                     const cells = [];
                     let lines = [];
@@ -5140,7 +5320,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     
                     break;
                 case 13: /** enter key */
-                    const freeFormatEl = util.getFreeFormatElement(selectionNode);
+                    const freeFormatEl = util.getFreeFormatElement(selectionNode, null);
                     if (!shift && freeFormatEl) {
                         e.preventDefault();
                         const selectionFormat = selectionNode === freeFormatEl;
@@ -5207,7 +5387,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                             
                             newEl.innerHTML = '<br>';
                             util.copyFormatAttributes(newEl, formatEl);
-                            util.removeItemAllParents(formatEl, null);
+                            util.removeItemAllParents(formatEl, null, null);
                             core.setRange(newEl, 1, newEl, 1);
                             break;
                         }
@@ -5239,9 +5419,17 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                         core.callPlugin(resizingName, function () {
                             const size = core.plugins.resizing.call_controller_resize.call(core, compContext._element, resizingName);
                             core.plugins[resizingName].onModifyMode.call(core, compContext._element, size);
-                        });
+                        }, null);
                     }
                     
+                    break;
+                case 27:
+                    if (resizingName) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        core.controllersOff();
+                        return false;
+                    }
                     break;
             }
 
@@ -5262,6 +5450,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             if (textKey && range.collapsed && range.startContainer === range.endContainer && util.isBreak(range.commonAncestorContainer)) {
                 const zeroWidth = util.createTextNode(util.zeroWidthSpace);
                 core.insertNode(zeroWidth, null);
+                core.setRange(zeroWidth, 1, zeroWidth, 1);
             }
 
             if (functions.onKeyDown) functions.onKeyDown(e, core);
@@ -5279,7 +5468,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
             if (core._isBalloon && ((core._isBalloonAlways && keyCode !== 27) || !range.collapsed)) {
                 if (core._isBalloonAlways) {
-                    event._showToolbarBalloonDelay();
+                    if (keyCode !== 27) event._showToolbarBalloonDelay();
                 } else {
                     event._showToolbarBalloon();
                     return;
@@ -5300,13 +5489,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 core.setRange(oFormatTag, 0, oFormatTag, 0);
                 event._applyTagEffects();
 
-                core._checkComponents();
                 core.history.push(false);
                 return;
             }
 
-            const formatEl = util.getFormatElement(selectionNode);
-            const rangeEl = util.getRangeFormatElement(selectionNode);
+            const formatEl = util.getFormatElement(selectionNode, null);
+            const rangeEl = util.getRangeFormatElement(selectionNode, null);
             if (((!formatEl && range.collapsed) || formatEl === rangeEl) && !util.isComponent(selectionNode)) {
                 core._setDefaultFormat(util.isRangeFormatElement(rangeEl) ? 'DIV' : 'P');
                 selectionNode = core.getSelectionNode();
@@ -5326,20 +5514,17 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 core.setRange(selectionNode, so < 0 ? 0 : so, selectionNode, eo < 0 ? 0 : eo);
             }
 
-            // --IE (backspace, enter, delete) input event not working
-            if(util.isIE && /^(8|13|46)$/.test(keyCode)) {
-                core._charCount('');
-                // component check
-                core._checkComponents();
-                // history stack
-                core.history.push(true);
-            }
+            core._charCount('');
+
+            // history stack
+            core.history.push(true);
 
             if (functions.onKeyUp) functions.onKeyUp(e, core);
         },
 
         onScroll_wysiwyg: function (e) {
             core.controllersOff();
+            core._lineBreaker.style.display = 'none';
             if (core._isBalloon) event._hideToolbar();
             if (functions.onScroll) functions.onScroll(e, core);
         },
@@ -5354,6 +5539,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         onBlur_wysiwyg: function (e) {
             if (core._antiBlur) return;
             core.hasFocus = false;
+            core.controllersOff();
             if (core._isInline || core._isBalloon) event._hideToolbar();
             if (functions.onBlur) functions.onBlur(e, core);
         },
@@ -5409,7 +5595,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const element = context.element;
             const editorHeight = element.editorArea.offsetHeight;
             const y = (this.scrollY || _d.documentElement.scrollTop) + options.stickyToolbar;
-            const editorTop = event._getStickyOffsetTop() - (core._isInline ? element.toolbar.offsetHeight : 0);
+            const editorTop = event._getEditorOffsets().top - (core._isInline ? element.toolbar.offsetHeight : 0);
             
             if (y < editorTop) {
                 event._offStickyToolbar();
@@ -5423,16 +5609,26 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             }
         },
 
-        _getStickyOffsetTop: function () {
+        _getEditorOffsets: function () {
             let offsetEl = context.element.topArea;
-            let offsetTop = 0;
+            let t = 0, l = 0, s = 0;
 
             while (offsetEl) {
-                offsetTop += offsetEl.offsetTop;
+                t += offsetEl.offsetTop;
+                l += offsetEl.offsetLeft;
+                s += offsetEl.scrollTop;
                 offsetEl = offsetEl.offsetParent;
             }
 
-            return offsetTop;
+            return {
+                top: t,
+                left: l,
+                scroll: s
+            };
+        },
+
+        _getPageBottomSpace: function () {
+            return _d.documentElement.scrollHeight - (event._getEditorOffsets().top + context.element.topArea.offsetHeight);
         },
 
         _onStickyToolbar: function () {
@@ -5469,8 +5665,9 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             const clipboardData = e.clipboardData;
             if (!clipboardData) return true;
 
-            const maxCharCount = core._charCount(clipboardData.getData('text/plain'));
+            const plainText = clipboardData.getData('text/plain').replace(/\n/g, '');
             const cleanData = core.cleanHTML(clipboardData.getData('text/html'), core.pasteTagsWhitelistRegExp);
+            const maxCharCount = core._charCount(options.charCounterType === 'byte-html' ? cleanData : plainText);
 
             if (typeof functions.onPaste === 'function' && !functions.onPaste(e, cleanData, maxCharCount, core)) {
                 e.preventDefault();
@@ -5496,7 +5693,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
 
         onCut_wysiwyg: function () {
             _w.setTimeout(function () {
-                core._resourcesStateChange();
+                // history stack
+                core.history.push(false);
             });
         },
 
@@ -5516,7 +5714,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                     context.image.imgInputFile.files = files;
                     core.plugins.image.onRender_imgInput.call(core);
                     context.image.imgInputFile.files = null;
-                });
+                }, null);
             // check char count
             } else if (!core._charCount(dataTransfer.getData('text/plain'))) {
                 e.preventDefault();
@@ -5534,6 +5732,68 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             if (functions.onDrop) functions.onDrop(e, core);
         },
 
+        onmouseMove_wysiwyg: function (e) {
+            const component = util.getParentElement(e.target, util.isComponent);
+            const lineBreakerStyle = core._lineBreaker.style;
+
+            if (component) {
+                let scrollTop = 0;
+                let el = context.element.wysiwyg;
+                do {
+                    scrollTop += el.scrollTop;
+                    el = el.parentElement;
+                } while (el && !/^(BODY|HTML)$/i.test(el.nodeName));
+
+                const wScroll = context.element.wysiwyg.scrollTop;
+                const offsets = event._getEditorOffsets();
+                const componentTop = util.getOffset(component, context.element.wysiwygFrame).top + wScroll;
+                const y = e.pageY + scrollTop + (options.iframe ? context.element.toolbar.offsetHeight : 0);
+                const c = componentTop + (options.iframe ? scrollTop : offsets.top);
+
+                let dir = '', top = '';
+                if (!util.isFormatElement(component.previousElementSibling) && y < (c + 20)) {
+                    top = componentTop;
+                    dir = 't';
+                } else if (!util.isFormatElement(component.nextElementSibling) && y > (c + component.offsetHeight - 20)) {
+                    top = componentTop + component.offsetHeight;
+                    dir = 'b';
+                } else {
+                    lineBreakerStyle.display = 'none';
+                    return;
+                }
+
+                core._variable._lineBreakComp = component;
+                core._variable._lineBreakDir = dir;
+                lineBreakerStyle.top = (top - wScroll) + 'px';
+                lineBreakerStyle.visibility = 'hidden';
+                lineBreakerStyle.display = 'block';
+                core._lineBreakerButton.style.left = (component.offsetLeft + (component.offsetWidth / 2) - (core._lineBreakerButton.offsetWidth / 2)) + 'px';
+                lineBreakerStyle.visibility = '';
+            } // off line breaker
+            else if (lineBreakerStyle.display !== 'none') {
+                lineBreakerStyle.display = 'none';
+            }
+        },
+
+        _onMouseDown_lineBreak: function (e) {
+            e.preventDefault();
+        },
+
+        _onLineBreak: function () {
+            const component = core._variable._lineBreakComp;
+
+            const format = util.createElement('P');
+            format.innerHTML = '<br>';
+            component.parentNode.insertBefore(format, core._variable._lineBreakDir === 't' ? component : component.nextSibling);
+
+            core._lineBreaker.style.display = 'none';
+            core._variable._lineBreakComp = null;
+
+            core.setRange(format.firstChild, 1, format.firstChild, 1);
+            // history stack
+            core.history.push(false);
+        },
+
         _setDropLocationSelection: function (e) {
             e.stopPropagation();
             e.preventDefault();
@@ -5546,21 +5806,6 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             event._applyTagEffects();
             if (context.tool.save) context.tool.save.removeAttribute('disabled');
             if (functions.onChange) functions.onChange(core.getContents(true), core);
-        },
-
-        _rangedeleteAssistant: function (start, end) {
-            start = util.getParentElement(start, function (current) { return current.getAttribute && (current.getAttribute('contenteditable') === 'false' || this.isComponent(current)); }.bind(util));
-            end = util.getParentElement(end, function (current) { return current.getAttribute && (current.getAttribute('contenteditable') === 'false' || this.isComponent(current)); }.bind(util));
-
-            _w.setTimeout(function (start, end) {
-                if (start) {
-                    this.removeItem(start);
-                    if(start === end) return;
-                }
-                if (end) {
-                    this.removeItem(end);
-                }
-            }.bind(util, start, end));
         },
 
         _addEvent: function () {
@@ -5582,6 +5827,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             eventWysiwyg.addEventListener('scroll', event.onScroll_wysiwyg, false);
             eventWysiwyg.addEventListener('focus', event.onFocus_wysiwyg, false);
             eventWysiwyg.addEventListener('blur', event.onBlur_wysiwyg, false);
+
+            /** line breaker */
+            eventWysiwyg.addEventListener('mousemove', event.onmouseMove_wysiwyg, false);
+            core._lineBreakerButton.addEventListener('mousedown', event._onMouseDown_lineBreak, false);
+            core._lineBreakerButton.addEventListener('click', event._onLineBreak, false);
 
             /** Events are registered only when there is a table plugin.  */
             if (core.plugins.table) {
@@ -5620,6 +5870,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             context.element.toolbar.removeEventListener('mousedown', event.onMouseDown_toolbar);
             context.element.toolbar.removeEventListener('click', event.onClick_toolbar);
 
+            eventWysiwyg.removeEventListener('mousedown', event.onMouseDown_wysiwyg);
             eventWysiwyg.removeEventListener('click', event.onClick_wysiwyg);
             eventWysiwyg.removeEventListener(util.isIE ? 'textinput' : 'input', event.onInput_wysiwyg);
             eventWysiwyg.removeEventListener('keydown', event.onKeyDown_wysiwyg);
@@ -5629,8 +5880,11 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             eventWysiwyg.removeEventListener('dragover', event.onDragOver_wysiwyg);
             eventWysiwyg.removeEventListener('drop', event.onDrop_wysiwyg);
             eventWysiwyg.removeEventListener('scroll', event.onScroll_wysiwyg);
+
+            eventWysiwyg.removeEventListener('mousemove', event.onmouseMove_wysiwyg);
+            core._lineBreakerButton.removeEventListener('mousedown', event._onMouseDown_lineBreak);
+            core._lineBreakerButton.removeEventListener('click', event._onLineBreak);
             
-            eventWysiwyg.removeEventListener('mousedown', event.onMouseDown_wysiwyg);
             eventWysiwyg.removeEventListener('touchstart', event.onMouseDown_wysiwyg, {passive: true, useCapture: false});
             
             eventWysiwyg.removeEventListener('focus', event.onFocus_wysiwyg);
@@ -5718,8 +5972,8 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         onImageUploadBefore: null,
 
         /**
-         * @description Called when the image is uploaded or the uploaded image is deleted
-         * @param {Element} targetImgElement Current img element
+         * @description Called when the image is uploaded, updated, deleted
+         * @param {Element} targetElement Current img element
          * @param {Number} index Uploaded index
          * @param {String} state Upload status ('create', 'update', 'delete')
          * @param {Object} imageInfo Image info object
@@ -5728,6 +5982,9 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * - size: file size
          * - select: select function
          * - delete: delete function
+         * - element: img element
+         * - src: src attribute of img tag
+         * @param {Number} remainingFilesCount Count of remaining files to upload (0 when added as a url)
          * @param {Object} core Core object
          */
         onImageUpload: null,
@@ -5740,6 +5997,22 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @returns {Boolean}
          */
         onImageUploadError: null,
+
+        /**
+         * @description Called when the video(iframe) is is uploaded, updated, deleted
+         * @param {Element} targetElement Current iframe element
+         * @param {Number} index Uploaded index
+         * @param {String} state Upload status ('create', 'update', 'delete')
+         * @param {Object} videoInfo Video info object
+         * - index: data index
+         * - select: select function
+         * - delete: delete function
+         * - element: iframe element
+         * - src: src attribute of iframe tag
+         * @param {Number} remainingFilesCount Count of remaining files to upload (0 when added as a url)
+         * @param {Object} core Core object
+         */
+        onVideoUpload: null,
 
         /**
          * @description Add or reset option property
@@ -5790,6 +6063,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 _charCounter: el.charCounter,
                 _charWrapper: el.charWrapper,
                 _loading: el.loading,
+                _lineBreaker: el.lineBreaker,
                 _resizeBack: el.resizeBackground,
                 _stickyDummy: el._stickyDummy,
                 _arrow: el._arrow
@@ -5799,7 +6073,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
             core.lang = lang = options.lang;
             core.context = context = _Context(context.element.originElement, constructed, options);
 
-            core._imagesInfoReset = true;
+            core._componentsInfoReset = true;
             core._init(true, _initHTML);
             event._addEvent();
             core._charCount('');
@@ -5815,10 +6089,12 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
          * @param {String} style Style string
          */
         setDefaultStyle: function (style) {
+            const optionStyle = util._setDefaultOptionStyle(options);
+
             if (typeof style === 'string' && style.trim().length > 0) {
-                context.element.wysiwyg.style.cssText = style;
+                context.element.wysiwyg.style.cssText = optionStyle + style;
             } else {
-                context.element.wysiwyg.style.cssText.removeAttribute('style');
+                context.element.wysiwyg.style.cssText = optionStyle;
             }
         },
 
@@ -5862,11 +6138,43 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         },
 
         /**
+         * @description Get the editor's number of characters or binary data size.
+         * You can use the "charCounterType" option format.
+         * @param {String|null} charCounterType options - charCounterType ('char', 'byte', 'byte-html')
+         * If argument is no value, the currently set "charCounterType" option is used.
+         * @returns {Number}
+         */
+        getCharCount: function (charCounterType) {
+            charCounterType = typeof charCounterType === 'string' ? charCounterType : options.charCounterType;
+            return core._getCharLength((charCounterType === 'byte-html' ? context.element.wysiwyg.innerHTML : context.element.wysiwyg.textContent), charCounterType);
+        },
+
+        /**
          * @description Gets uploaded images informations
+         * - index: data index
+         * - name: file name
+         * - size: file size
+         * - select: select function
+         * - delete: delete function
+         * - element: img element
+         * - src: src attribute of img tag
          * @returns {Array}
          */
         getImagesInfo: function () {
-            return core._variable._imagesInfo;
+            return context.image ? context.image._imagesInfo : [];
+        },
+
+        /**
+         * @description Gets uploaded videos informations
+         * - index: data index
+         * - select: select function
+         * - delete: delete function
+         * - element: iframe element
+         * - src: src attribute of iframe tag
+         * @returns {Array}
+         */
+        getVideosInfo: function () {
+            return context.video ? context.video._videosInfo : [];
         },
 
         /**
@@ -5876,7 +6184,7 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         insertImage: function (files) {
             if (!core.plugins.image || !files) return;
 
-            if (!core.initPlugins.image) core.callPlugin('image', core.plugins.image.submitAction.bind(core, files));
+            if (!core.initPlugins.image) core.callPlugin('image', core.plugins.image.submitAction.bind(core, files), null);
             else core.plugins.image.submitAction.call(core, files);
             core.focus();
         },
@@ -5884,19 +6192,20 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
         /**
          * @description Inserts an HTML element or HTML string or plain string at the current cursor position
          * @param {Element|String} html HTML Element or HTML string or plain string
+         * @param {Boolean} notCleaningData If true, inserts the HTML string without refining it with core.cleanHTML.
          */
-        insertHTML: function (html, _clean) {
+        insertHTML: function (html, notCleaningData) {
             if (typeof html === 'string') {
-                if (!_clean) html = core.cleanHTML(html);
+                if (!notCleaningData) html = core.cleanHTML(html, null);
                 try {
-                    const parseDocument = core._parser.parseFromString(html, 'text/html');
-                    const children = parseDocument.body.childNodes;
-                    let c, a;
-                    while ((c = children[0])) {
-                        core.insertNode(c, a);
+                    const dom = _d.createRange().createContextualFragment(html);
+                    const domTree = dom.childNodes;
+                    let c, a, t;
+                    while ((c = domTree[0])) {
+                        t = core.insertNode(c, a);
                         a = c;
                     }
-                    const offset = a.nodeType === 3 ? a.textContent.length : 1;
+                    const offset = a.nodeType === 3 ? (t.endOffset || a.textContent.length): a.childNodes.length;
                     core.setRange(a, offset, a, offset);
                 } catch (error) {
                     core.execCommand('insertHTML', false, html);
@@ -5907,13 +6216,17 @@ export default function (context, pluginCallButtons, plugins, lang, options, _ic
                 } else {
                     let afterNode = null;
                     if (util.isFormatElement(html) || util.isMedia(html)) {
-                        afterNode = util.getFormatElement(core.getSelectionNode());	
+                        afterNode = util.getFormatElement(core.getSelectionNode(), null);	
                     }
                     core.insertNode(html, afterNode);
                 }
             }
             
+            core.effectNode = null;
             core.focus();
+
+            // history stack
+            core.history.push(false);
         },
 
         /**

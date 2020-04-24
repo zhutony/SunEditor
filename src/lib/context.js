@@ -9,9 +9,9 @@
 
 /**
  * @description Elements and variables you should have
- * @param {HTMLElement} element textarea element
+ * @param {Element} element textarea element
  * @param {object} cons Toolbar element you created
- * @param {json} options Inserted options
+ * @param {JSON|Object} options Inserted options
  * @returns {Object} {Elements, variables of the editor, option}
  * @private
  */
@@ -32,6 +32,7 @@ const _Context = function (element, cons, options) {
             code: cons._codeArea,
             placeholder: cons._placeholder,
             loading: cons._loading,
+            lineBreaker: cons._lineBreaker,
             resizeBackground: cons._resizeBack,
             _stickyDummy: cons._stickyDummy,
             _arrow: cons._arrow

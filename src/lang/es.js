@@ -22,6 +22,7 @@
 	}
 }(typeof window !== 'undefined' ? window : this, function (window, noGlobal) {
 	const lang = {
+		code: 'es',
 		toolbar: {
 			default: 'Valor por defecto',
 			save: 'Guardar',
@@ -120,6 +121,7 @@
 			insertColumnBefore: 'Insertar columna antes',
 			insertColumnAfter: 'Insertar columna después',
 			deleteColumn: 'Eliminar columna',
+			fixedColumnWidth: 'Ancho de columna fijo',
 			resize100: 'Redimensionar 100%',
 			resize75: 'Redimensionar 75%',
 			resize50: 'Redimensionar 50%',

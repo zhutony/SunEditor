@@ -59,6 +59,9 @@ export default {
         return listDiv;
     },
 
+     /**
+     * @overriding core
+     */
     active: function (element) {
         const button = this.context.list.targetButton;
         const icon = button.querySelector('svg');
@@ -66,16 +69,16 @@ export default {
 
         if (!element) {
             button.removeAttribute('data-focus');
-            util.changeIcon(icon, this.context.list.icons.number);
+            util.changeElement(icon, this.context.list.icons.number);
             util.removeClass(button, 'active');
         } else if (util.isList(element)) {
             const nodeName = element.nodeName;
             button.setAttribute('data-focus', nodeName);
             util.addClass(button, 'active');
             if (/UL/i.test(nodeName)) {
-                util.changeIcon(icon, this.context.list.icons.bullets);
+                util.changeElement(icon, this.context.list.icons.bullets);
             } else {
-                util.changeIcon(icon, this.context.list.icons.number);
+                util.changeElement(icon, this.context.list.icons.number);
             }
             
             return true;
@@ -84,6 +87,9 @@ export default {
         return false;
     },
 
+     /**
+     * @overriding submenu
+     */
     on: function () {
         const listContext = this.context.list;
         const list = listContext._list;

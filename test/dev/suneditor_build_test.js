@@ -11,6 +11,7 @@ import lang from '../../src/lang';
 import custom_plugin_submenu from './custom_plugin_submenu';
 import custom_plugin_dialog from './custom_plugin_dialog';
 import Resolutions from './Resolutions';
+// import subLib from './sub_lib';
 import custom_container from './custom_container';
 
 import 'codemirror/lib/codemirror.css';
@@ -26,7 +27,7 @@ const align = require('../../src/plugins/submenu/align')
 
 
 suneditor.create("sample1", {
-    plugins: [custom_plugin_dialog, custom_container, plugins.blockquote, plugins.link, plugins.table, plugins.textStyle],
+    plugins: [custom_plugin_dialog, custom_container, Resolutions, plugins.template, plugins.blockquote, plugins.link, plugins.table, plugins.textStyle, custom_plugin_submenu],
     // mode: "balloon",
     // iframe: true,
     width: '100%',
@@ -34,32 +35,42 @@ suneditor.create("sample1", {
     imageFileInput: false,
     buttonList: [
         [
-            {
-                name: 'customLink', 
-                dataCommand: 'customLink',
-                buttonClass:'', 
-                title:'Custom - Link', 
-                dataDisplay:'dialog',
-                innerHTML:''
-            },
+            // {
+            //     name: 'customLink', 
+            //     dataCommand: 'customLink',
+            //     buttonClass:'', 
+            //     title:'Custom - Link', 
+            //     dataDisplay:'dialog',
+            //     innerHTML:'D'
+            // },
             {
                 name: 'custom_container', 
                 dataCommand: 'custom_container',
                 buttonClass:'', 
                 title:'Custom - Container', 
                 dataDisplay:'container',
-                innerHTML:''
+                innerHTML:'C'
             },
-            'bold', 'italic'
+            {
+                name: 'Resolutions', 
+                dataCommand: 'Resolutions',
+                buttonClass:'', 
+                title:'Resolutions - Container', 
+                dataDisplay:'submenu',
+                innerHTML:'S'
+            },
+            'bold', 'italic', 'template', 'customLink', 'custom_plugin_submenu'
         ]
     ],
-    maxCharCount: 2000
+    maxCharCount: 2000,
+    charCounterType: 'byte',
+    resizingBar: true
 });
 
 
 let s1 = suneditor.create('editor', {
     plugins: plugins,
-    // mode: 'balloon-always', 
+    mode: 'balloon-always',
     katex: Katex,
     // attributesWhitelist: 'style',
     buttonList: [
@@ -77,21 +88,21 @@ let s1 = suneditor.create('editor', {
         'preview', 'print', 'save', 'template']
     ],
     icons: {
-        undo: '',
+        undo: 'U',
         bold: '<span class="se-icon-text">B</span>'
     },
     width: '100%',
-    height: '500',
+    height: '200px',
     defaultStyle: 'font-size: 10px;',
     // fullPage: true,
     // pasteTagsWhitelist: 'p|h[1-6]',
-    attributesWhitelist: {
-        table: "style",
-        tbody: "style",
-        thead: "style",
-        tr: "style",
-        td: "style"
-    },
+    // attributesWhitelist: {
+    //     table: "style",
+    //     tbody: "style",
+    //     thead: "style",
+    //     tr: "style",
+    //     td: "style"
+    // },
     addTagsWhitelist: '//',
     // addTagsWhitelist: '//',
     formats: [
@@ -110,9 +121,9 @@ let s1 = suneditor.create('editor', {
         'pre',
         'blockquote'
     ],
-    charCounterType: 'byte',
-    charCounterLabel: 'BYTE : ',
-    maxCharCount: 200
+    charCounterType: 'char',
+    charCounterLabel: 'HTML BYTE : ',
+    maxCharCount: 650
 })
 
 // s1.core._charCount = function (nextCharCount, blink) {
@@ -186,23 +197,52 @@ window.cm = CodeMirror
 // });
 
 window.sun_destroy1 = function () {
-    s1.setDefaultStyle('font-family: cursive; font-size: 10px;');
+    // s1.destroy()
+    s1.setDefaultStyle('height: 100px; font-family: cursive; font-size: 10px;');
+    // s1.setContents('<!DOCTYPE html>'+
+    // '<html lang="en">'+
+    // '<head>'+
+    //     '<meta charset="UTF-8">'+
+    //     '<meta name="viewport" content="width=device-width, initial-scale=1">'+
+    //     '<meta name="author" content="https://github.com/JiHong88" />'+
+    //     '<meta name="description" content="Pure javascript wysiwyg web editor" /> <!-- meta comment -->'+
+    // '<style>'+
+    // '/* css comment goes here */'+
+    // '</style>'+
+    // '</head>'+
+    // '<body>'+
+    // '<!-- html comment goes here -->'+
+
+    // '</body>'+
+    // '</html>')
 }
 
 window.sun_create1 = function () {
-    s1.destroy();
-    s1 = suneditor.create('editor', {
-        plugins: [align, plugins.link],
-        buttonList: [['align', 'link', 'bold', 'underline', 'italic', 'strike', 'removeFormat', 'codeView']],
-        width: '100%',
-        height: 'auto'
-      })
+    // s1.destroy();
+    // s1 = suneditor.create('editor', {
+    //     plugins: [align, plugins.link],
+    //     buttonList: [['align', 'link', 'bold', 'underline', 'italic', 'strike', 'removeFormat', 'codeView']],
+    //     width: '100%',
+    //     height: 'auto'
+    //   })
 }
 
+s1.onKeyDown = function (e, core) {
+    const keyCode = e.keyCode
+    const ctrl = e.ctrlKey || e.metaKey || keyCode === 91 || keyCode === 92;
+    if (ctrl && keyCode === 187) {
+        e.preventDefault();
+        const anchor = core.util.getParentElement(core.getSelectionNode(), core.util.isAnchor)
+        if (anchor) {
+            window.open(anchor.href)
+        }
+    }
+}
 
 let ss = window.ss = suneditor.create(document.getElementById('editor1'), {
     // lang: lang.ko,
     plugins: plugins,
+    height: '500px',
     // mode: 'balloon-always',
     buttonList: [
         ['undo', 'redo',
@@ -220,20 +260,22 @@ let ss = window.ss = suneditor.create(document.getElementById('editor1'), {
     ],
     // maxCharCount: 20,
     katex: Katex,
-    height: 'auto',
     width: '100%',
     youtubeQuery :'autoplay=1&mute=1&enablejsapi=1',
     placeholder: 'SSSFdjskfdsff.f.fdsa.f...',
     fullPage: true,
+    // videoHeight: '56.22%',
+    videoRatio: 0.75,
+    // imageHeight: 400,
     addTagsWhitelist: 'mark|canvas|label|select|option|input|nav|button',
-    imageUploadUrl: 'http://localhost:3000/files/upload',
-    attributesWhitelist: {
-        table: "style",
-        tbody: "style",
-        thead: "style",
-        tr: "style",
-        td: "style"
-    },
+    // imageUploadUrl: 'http://localhost:3000/files/upload',
+    // attributesWhitelist: {
+    //     table: "style",
+    //     tbody: "style",
+    //     thead: "style",
+    //     tr: "style",
+    //     td: "style"
+    // },
     templates: [
         {
             name: 'Template-1',
@@ -256,14 +298,14 @@ let ss = window.ss = suneditor.create(document.getElementById('editor1'), {
 });
 // ss.setContents('fsafsa')
 ss.onload = function (core) {
-    console.log('onload', core);
-    core.focus();
+    console.log('onload', core.context.video._videosInfo);
+    // core.focus();
 };
 ss.onScroll = function (e) {
-    console.log('onScroll', e);
+    // console.log('onScroll', e);
 };
 ss.onClick = function (e) {
-    console.log('onClick', e);
+    // console.log('onClick', e);
 };
 ss.onFocus = function (e, core) {
     console.log('onFocus', e);
@@ -272,17 +314,20 @@ ss.onBlur = function (e, core) {
     console.log('onBlur', e);
 };
 ss.onKeyDown = function (e) {
-    console.log('onKeyDown', e);
+    // console.log('onKeyDown', e);
 };
 ss.onKeyUp = function (e) {
-    console.log('onKeyUp', e);
+    // console.log('onKeyUp', e);
 };
 ss.onDrop = function (e) {
-    console.log('onDrop', e);
+    // console.log('onDrop', e);
 };
-
-ss.onChange = function (contents) {
-    console.log('change')
+ss.onVideoUpload = function (targetElement, index, state, videoInfo) {
+    // console.log(`targetElement:${targetElement}, index:${index}, state:${state}`)
+    console.log(`videoInfo-----`, videoInfo)
+}
+ss.onChange = function (contents, core) {
+    console.log('change', core.context.video._videosInfo)
 }
 
 // ss.imageUploadHandler = function (response, core) {
@@ -295,26 +340,26 @@ ss.onImageUploadBefore = function (files, info, core) {
     return true;
 }
 
-ss.onImageUpload = function () {
-    console.log(ss.getImagesInfo());
+ss.onImageUpload = function (targetElement, index, state, info) {
+    console.log('imageInfo-----', info);
 }
 
 ss.showInline = function (toolbar, context) {
 
 },
 
-ss.showController = function (name, controllers, core) {
-    let c = null;
-    console.log('target', core.currentControllerTarget);
-    for (let i in controllers) {
-        c = controllers[i];
-        if (core.util.hasClass(c, 'se-controller-resizing')) {
-            const updateButton = c.querySelector('[data-command="update"]');
-            if (name === 'image') updateButton.setAttribute('disabled', true);
-            else updateButton.removeAttribute('disabled');
-        }
-    }
-}
+// ss.showController = function (name, controllers, core) {
+//     let c = null;
+//     console.log('target', core.currentControllerTarget);
+//     for (let i in controllers) {
+//         c = controllers[i];
+//         if (core.util.hasClass(c, 'se-controller-resizing')) {
+//             const updateButton = c.querySelector('[data-command="update"]');
+//             if (name === 'image') updateButton.setAttribute('disabled', true);
+//             else updateButton.removeAttribute('disabled');
+//         }
+//     }
+// }
 
 window.sun_noticeOpen = function () {
     ss.noticeOpen('test notice');
@@ -360,6 +405,7 @@ window.sun_getContents = function () {
 window.sun_setContents = function (content) {
     ss.setContents('<style>div{color: red;}</style><p><br></p><img src="https://picsum.photos/200/300"><img src="https://picsum.photos/200/300"><p><br></p>');
     ss.core.history.reset(true);
+    ss.core.focusEdge(null);
     // ss.core.context.tool.save.disabled = true;
 }
 
@@ -409,29 +455,30 @@ const editor = suneditor.init({
 });
 
 let s2 = window.s2 = editor.create(document.getElementById('editor2'), {
-    lang: lang.ru,
-    mode: 'balloon',
-    // toolbarWidth: 500,
+    // lang: lang.ru,
+    // mode: 'inline',
+    // toolbarWidth: 150,
     plugins: plugins,
     // maxHeight: '400px',
-    height: 'auto',
+    height: '700px',
+    defaultStyle: 'height: 500px; font-size:10px;',
     // height: 400,
     fontSizeUnit: 'pt',
     imageResizing: true,
     // imageWidth: '400',
     buttonList: [
-        ['undo', 'redo'],
-        ['font', 'fontSize', 'formatBlock'],
-        ['paragraphStyle'],
-        ['bold', 'underline', 'italic', 'strike', 'subscript', 'superscript'],
+        // ['undo', 'redo'],
+        // ['font', 'fontSize', 'formatBlock'],
+        // ['paragraphStyle'],
+        // ['bold', 'underline', 'italic', 'strike', 'subscript', 'superscript'],
         ['fontColor', 'hiliteColor', 'textStyle'],
-        ['removeFormat'],
-        ['outdent', 'indent'],
-        ['align', 'horizontalRule', 'list', 'lineHeight', 'table'],
+        // ['removeFormat'],
+        // ['outdent', 'indent'],
+        // ['align', 'horizontalRule', 'list', 'lineHeight', 'table'],
         ['link', 'image', 'video'],
-        ['fullScreen', 'showBlocks', 'codeView'],
-        ['preview', 'print'],
-        ['save', 'template'],
+        // ['fullScreen', 'showBlocks', 'codeView'],
+        // ['preview', 'print'],
+        // ['save', 'template'],
     ],
     icons: {
         underline: '',
@@ -604,7 +651,7 @@ s2.onload = function (core, isUpdate) {
     console.log('2222onload222', isUpdate)
 }
 
-s2.onImageUpload = function (targetImgElement, index, state, imageInfo, remainingFilesCount) {
+s2.onImageUpload = function (targetElement, index, state, imageInfo, remainingFilesCount) {
     console.log('imageInfo', imageInfo);
 
     if (state === 'delete') {
@@ -652,26 +699,11 @@ window.sun_create2 = function () {
 let s3 = editor.create(document.getElementsByName('editor3')[0], {
     buttonList: [
         [plugins.formatBlock, 'align', 'horizontalRule', 'list', 'table', 'codeView', plugins.image, plugins.video, plugins.link, plugins.link, plugins.fontColor, plugins.hiliteColor, plugins.fontSize],
-        [
-            {
-                // plugin's name attribute
-                name: 'custom_plugin_submenu', 
-                // name of the plugin to be recognized by the toolbar.
-                // It must be the same as the name attribute of the plugin 
-                dataCommand: 'custom_plugin_submenu',
-                // button's class ("se-btn" class is registered, basic button click css is applied.)
-                buttonClass:'se-btn', 
-                // HTML title attribute
-                title:'Custom plugin of the submenu', 
-                // 'submenu' or 'dialog' or '' (command button)
-                dataDisplay:'submenu',
-                // HTML to be append to button
-                innerHTML:''
-            }
-        ]
     ],
+    mode: 'balloon-always',
     lang: ko,
     width: '100%',
+    height: '500px',
     stickyToolbar: false,
     popupDisplay: 'local',
     // iframe: true,
@@ -679,15 +711,15 @@ let s3 = editor.create(document.getElementsByName('editor3')[0], {
     // resizingBar: false
     // showPathLabel:false
     charCounter: true,
-    formats: ['h1', 'h4', 'pre', 'p', 'blockquote', {
-        tag: 'div',
-        class: '__se__format__aaa',
-        name: 'red div',
-        style: 'margin: 10px; background-color: #f5f5f5;',
-        command: 'replace'
-    }],
+    // formats: ['h1', 'h4', 'pre', 'p', 'blockquote', {
+    //     tag: 'div',
+    //     class: '__se__format__aaa',
+    //     name: 'red div',
+    //     style: 'margin: 10px; background-color: #f5f5f5;',
+    //     command: 'replace'
+    // }],
     placeholder: 'Start typing something.4..',
-    maxCharCount: 280,
+    // maxCharCount: 280,
 });
 window.sun_destroy3 = function () {
     s3.destroy();
@@ -725,7 +757,7 @@ window.sun_create4 = function() {
         mode: 'classic',
         // toolbarWidth: 800,
         maxCharCount: 280,
-        height: 'auto',
+        height: '500px',
         placeholder: 'Start typing something..5.'
         // callBackSave: (contents) => {
         //     console.log('callback')

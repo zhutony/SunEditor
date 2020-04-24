@@ -96,7 +96,7 @@
 
 
             <h4 class="name" id="getXMLHttpRequest"><span class="type-signature"></span>getXMLHttpRequest<span
-                    class="signature">()</span><span class="type-signature"> &rarr; {Object}</span></h4>
+                    class="signature">()</span><span class="type-signature"> &rarr; {XMLHttpRequest | ActiveXObject}</span></h4>
             <div class="description">
                 Gets XMLHttpRequest object
             </div>
@@ -210,7 +210,7 @@
                 <tr>
                     <td class="name"><code>doc</code></td>
                     <td class="type">
-                        <span class="param-type">Element|null</span>
+                        <span class="param-type">Document|null</span>
                     </td>
                     <td class="description last">To get the CSS text of an document(core._wd). If null get the current document.</td>
                 </tr>
@@ -326,7 +326,35 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
+                    </td>
+                    <td class="description last">The element to check</td>
+                </tr>
+                </tbody>
+            </table>
+            <dl class="details"></dl>
+
+
+            <h4 class="name" id="isTextStyleElement"><span class="type-signature"></span>isTextStyleElement<span class="signature">(element)</span><span
+                    class="type-signature"> &rarr; {Boolean}</span></h4>
+            <div class="description">
+                It is judged whether it is a node related to the text style.<br>
+                (strong|span|font|b|var|i|em|u|ins|s|strike|del|sub|sup|mark|a|label)
+            </div>
+            <h5>Parameters:</h5>
+            <table class="params">
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th class="last">Description</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td class="name"><code>element</code></td>
+                    <td class="type">
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">The element to check</td>
                 </tr>
@@ -354,7 +382,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">The element to check</td>
                 </tr>
@@ -382,7 +410,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">The element to check</td>
                 </tr>
@@ -411,7 +439,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">The element to check</td>
                 </tr>
@@ -438,7 +466,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">The element to check</td>
                 </tr>
@@ -465,7 +493,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">The element to check</td>
                 </tr>
@@ -492,7 +520,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">Reference element if null or no value, it is relative to the current focus node.</td>
                 </tr>
@@ -526,7 +554,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">Reference element if null or no value, it is relative to the current focus node.</td>
                 </tr>
@@ -560,7 +588,7 @@
                 <tr>
                     <td class="name"><code>element</code></td>
                     <td class="type">
-                        <span class="param-type">Element</span>
+                        <span class="param-type">Node</span>
                     </td>
                     <td class="description last">Reference element if null or no value, it is relative to the current focus node.</td>
                 </tr>
@@ -747,7 +775,7 @@
             <tr>
                 <td class="name"><code>item</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
                 <td class="description last">Element to find index</td>
             </tr>
@@ -781,7 +809,7 @@
             <tr>
                 <td class="name"><code>element</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
                 <td class="description last">Element to find index</td>
             </tr>
@@ -950,7 +978,7 @@
             <tr>
                 <td class="name"><code>node</code></td>
                 <td class="type">
-                    <span class="param-type">Element|String</span>
+                    <span class="param-type">Node|String</span>
                 </td>
                 <td class="description last">The element or element name to check</td>
             </tr>
@@ -977,7 +1005,7 @@
             <tr>
                 <td class="name"><code>node</code></td>
                 <td class="type">
-                    <span class="param-type">Element|String</span>
+                    <span class="param-type">Node|String</span>
                 </td>
                 <td class="description last">The element or element name to check</td>
             </tr>
@@ -1004,7 +1032,7 @@
             <tr>
                 <td class="name"><code>node</code></td>
                 <td class="type">
-                    <span class="param-type">Element|String</span>
+                    <span class="param-type">Node|String</span>
                 </td>
                 <td class="description last">The element or element name to check</td>
             </tr>
@@ -1031,7 +1059,7 @@
             <tr>
                 <td class="name"><code>node</code></td>
                 <td class="type">
-                    <span class="param-type">Element|String</span>
+                    <span class="param-type">Node|String</span>
                 </td>
                 <td class="description last">The element or element name to check</td>
             </tr>
@@ -1058,7 +1086,7 @@
             <tr>
                 <td class="name"><code>node</code></td>
                 <td class="type">
-                    <span class="param-type">Element|String</span>
+                    <span class="param-type">Node|String</span>
                 </td>
                 <td class="description last">The element or element name to check</td>
             </tr>
@@ -1085,7 +1113,7 @@
             <tr>
                 <td class="name"><code>node</code></td>
                 <td class="type">
-                    <span class="param-type">Element|String</span>
+                    <span class="param-type">Node|String</span>
                 </td>
                 <td class="description last">The element or element name to check</td>
             </tr>
@@ -1112,7 +1140,7 @@
             <tr>
                 <td class="name"><code>node</code></td>
                 <td class="type">
-                    <span class="param-type">Element|String</span>
+                    <span class="param-type">Node|String</span>
                 </td>
                 <td class="description last">The element or element name to check</td>
             </tr>
@@ -1149,7 +1177,7 @@
 
 
         <h4 class="name" id="getNumber"><span class="type-signature"></span>getNumber<span class="signature">(text, maxDec)</span><span
-                class="type-signature"> &rarr; {Number|null}</span></h4>
+                class="type-signature"> &rarr; {Number}</span></h4>
         <div class="description">
             Get a number.
         </div>
@@ -1208,7 +1236,7 @@
             <tr>
                 <td class="name"><code>validation</code></td>
                 <td class="type">
-                    <span class="param-type">function</span>
+                    <span class="param-type">Function</span>
                     |
                     <span class="param-type">null</span>
                 </td>
@@ -1245,7 +1273,7 @@
             <tr>
                 <td class="name"><code>validation</code></td>
                 <td class="type">
-                    <span class="param-type">function</span>
+                    <span class="param-type">Function</span>
                     |
                     <span class="param-type">null</span>
                 </td>
@@ -1277,7 +1305,7 @@
             <tr>
                 <td class="name"><code>element</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
                 <td class="description last">The element to check</td>
             </tr>
@@ -1393,14 +1421,14 @@
             <tr>
                 <td class="name"><code>first</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
                 <td class="description last">First element</td>
             </tr>
             <tr>
                 <td class="name"><code>last</code></td>
                 <td class="type">
-                    <span class="param-type">Element | null</span>
+                    <span class="param-type">Node | null</span>
                 </td>
                 <td class="description last">Last element</td>
             </tr>
@@ -1429,9 +1457,9 @@
             <tr>
                 <td class="name"><code>element</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
-                <td class="description last">Element node</td>
+                <td class="description last">Target node</td>
             </tr>
             <tr>
                 <td class="name"><code>wysiwygFrame</code></td>
@@ -1513,7 +1541,7 @@
             <tr>
                 <td class="name"><code>element</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
                 <td class="description last">Elements to replace text content</td>
             </tr>
@@ -1523,6 +1551,40 @@
                     <span class="param-type">String</span>
                 </td>
                 <td class="description last">Text to be applied</td>
+            </tr>
+            </tbody>
+        </table>
+        <dl class="details"></dl>
+
+
+        <h4 class="name" id="changeElement"><span class="type-signature"></span>changeElement<span class="signature">(icon, newIcon)</span><span
+                class="type-signature"></span></h4>
+        <div class="description">
+            Replace element.
+        </div>
+        <h5>Parameters:</h5>
+        <table class="params">
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th class="last">Description</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td class="name"><code>element</code></td>
+                <td class="type">
+                    <span class="param-type">Element</span>
+                </td>
+                <td class="description last">Target element</td>
+            </tr>
+            <tr>
+                <td class="name"><code>newElement</code></td>
+                <td class="type">
+                    <span class="param-type">String|Element</span>
+                </td>
+                <td class="description last">String or element of the new element to apply</td>
             </tr>
             </tbody>
         </table>
@@ -1706,6 +1768,45 @@
         <dl class="details"></dl>
 
 
+        <h4 class="name" id="toggleDisabledButtons"><span class="type-signature"></span>toggleDisabledButtons<span
+                class="signature">(disabled)</span><span class="type-signature"></span></h4>
+        <div class="description">
+            In the predefined code view mode, the buttons except the executable button are changed to the 'disabled' state.<br>
+            <a href="#codeViewDisabledButtons">core.codeViewDisabledButtons</a> (An array of buttons whose className is not <span style="color:#ff5565">"se-code-view-enabled"</span>)
+            <a href="#resizingDisabledButtons">core.resizingDisabledButtons</a> (An array of buttons whose className is not <span style="color:#ff5565">"se-resizing-enabled"</span>)
+
+            * @param disabled Disabled value
+            * @param buttonList Button array
+        </div>
+        <h5>Parameters:</h5>
+        <table class="params">
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th class="last">Description</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td class="name"><code>disabled</code></td>
+                <td class="type">
+                    <span class="param-type">Boolean</span>
+                </td>
+                <td class="description last">Disabled value</td>
+            </tr>
+            <tr>
+                <td class="name"><code>buttonList</code></td>
+                <td class="type">
+                    <span class="param-type">Array|HTMLCollection|NodeList</span>
+                </td>
+                <td class="description last">Button array</td>
+            </tr>
+            </tbody>
+        </table>
+        <dl class="details"></dl>
+
+
         <h4 class="name" id="removeItem"><span class="type-signature"></span>removeItem<span class="signature">(item)</span><span
                 class="type-signature"></span></h4>
         <div class="description">
@@ -1724,7 +1825,7 @@
             <tr>
                 <td class="name"><code>item</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
                 <td class="description last">Element to be remove</td>
             </tr>
@@ -1752,9 +1853,9 @@
             <tr>
                 <td class="name"><code>item</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
-                <td class="description last">Element to be remove</td>
+                <td class="description last">Node to be remove</td>
             </tr>
             <tr>
                 <td class="name"><code>validation</code></td>
@@ -1794,7 +1895,7 @@
             <tr>
                 <td class="name"><code>baseNode</code></td>
                 <td class="type">
-                    <span class="param-type">Element</span>
+                    <span class="param-type">Node</span>
                 </td>
                 <td class="description last">Element on which to base.</td>
             </tr>
@@ -2024,40 +2125,6 @@
         <dl class="details"></dl>
 
 
-        <h4 class="name" id="changeIcon"><span class="type-signature"></span>changeIcon<span class="signature">(icon, newIcon)</span><span
-                class="type-signature"></span></h4>
-        <div class="description">
-            Replace icon.
-        </div>
-        <h5>Parameters:</h5>
-        <table class="params">
-            <thead>
-            <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th class="last">Description</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr>
-                <td class="name"><code>icon</code></td>
-                <td class="type">
-                    <span class="param-type">Element</span>
-                </td>
-                <td class="description last">Icon element (svg, i)</td>
-            </tr>
-            <tr>
-                <td class="name"><code>newIcon</code></td>
-                <td class="type">
-                    <span class="param-type">String|Element</span>
-                </td>
-                <td class="description last">String or element of the icon to apply</td>
-            </tr>
-            </tbody>
-        </table>
-        <dl class="details"></dl>
-
-
         <h4 class="name" id="createTagsWhitelist"><span class="type-signature"></span>createTagsWhitelist<span class="signature">(list)</span><span
                 class="type-signature"> &rarr; {RegExp}</span></h4>
         <div class="description">
@@ -2111,6 +2178,7 @@
         <li><a href="document-util.html#getAttributesToString">getAttributesToString</a></li>
         <li><a href="document-util.html#getByteLength">getByteLength</a></li>
         <li><a href="document-util.html#isWysiwygDiv">isWysiwygDiv</a></li>
+        <li><a href="document-util.html#isTextStyleElement">isTextStyleElement</a></li>
         <li><a href="document-util.html#isFormatElement">isFormatElement</a></li>
         <li><a href="document-util.html#isRangeFormatElement">isRangeFormatElement</a></li>
         <li><a href="document-util.html#isFreeFormatElement">isFreeFormatElement</a></li>
@@ -2147,11 +2215,13 @@
         <li><a href="document-util.html#getOffset">getOffset</a></li>
         <li><a href="document-util.html#getOverlapRangeAtIndex">getOverlapRangeAtIndex</a></li>
         <li><a href="document-util.html#changeTxt">changeTxt</a></li>
+        <li><a href="document-util.html#changeElement">changeElement</a></li>
         <li><a href="document-util.html#setStyle">setStyle</a></li>
         <li><a href="document-util.html#hasClass">hasClass</a></li>
         <li><a href="document-util.html#addClass">addClass</a></li>
         <li><a href="document-util.html#removeClass">removeClass</a></li>
         <li><a href="document-util.html#toggleClass">toggleClass</a></li>
+        <li><a href="document-util.html#toggleDisabledButtons">toggleDisabledButtons</a></li>
         <li><a href="document-util.html#removeItem">removeItem</a></li>
         <li><a href="document-util.html#removeItemAllParents">removeItemAllParents</a></li>
         <li><a href="document-util.html#detachNestedList">detachNestedList</a></li>
@@ -2161,7 +2231,6 @@
         <li><a href="document-util.html#removeEmptyNode">removeEmptyNode</a></li>
         <li><a href="document-util.html#htmlRemoveWhiteSpace">htmlRemoveWhiteSpace</a></li>
         <li><a href="document-util.html#sortByDepth">sortByDepth</a></li>
-        <li><a href="document-util.html#changeIcon">changeIcon</a></li>
         <li><a href="document-util.html#createTagsWhitelist">createTagsWhitelist</a></li>
     </ul>
 </nav>

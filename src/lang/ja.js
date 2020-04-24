@@ -22,6 +22,7 @@
     }
 }(typeof window !== 'undefined' ? window : this, function (window, noGlobal) {
     const lang = {
+        code: 'ja',
         toolbar: {
             default: 'デフォルト',
             save: '保存',
@@ -120,6 +121,7 @@
             insertColumnBefore: '左に列を挿入',
             insertColumnAfter: '右に列を挿入',
             deleteColumn: '列を削除する',
+            fixedColumnWidth: '固定列幅',
             resize100: '100％ サイズ',
             resize75: '75％ サイズ',
             resize50: '50％ サイズ',

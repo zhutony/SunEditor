@@ -75,17 +75,20 @@ export default {
         return listDiv;
     },
 
+    /**
+     * @overriding core
+     */
     active: function (element) {
         const targetButton = this.context.align.targetButton;
         const target = targetButton.querySelector('svg');
 
         if (!element) {
-            this.util.changeIcon(target, this.context.align.icons.left);
+            this.util.changeElement(target, this.context.align.icons.left);
             targetButton.removeAttribute('data-focus');
         } else if (this.util.isFormatElement(element)) {
             const textAlign = element.style.textAlign;
             if (textAlign) {
-                this.util.changeIcon(target, this.context.align.icons[textAlign]);
+                this.util.changeElement(target, this.context.align.icons[textAlign]);
                 targetButton.setAttribute('data-focus', textAlign);
                 return true;
             }
@@ -94,6 +97,9 @@ export default {
         return false;
     },
 
+    /**
+     * @overriding submenu
+     */
     on: function () {
         const alignContext = this.context.align;
         const alignList = alignContext._alignList;
